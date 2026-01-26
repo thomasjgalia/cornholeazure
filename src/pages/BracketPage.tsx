@@ -224,24 +224,24 @@ export default function BracketPage() {
     let remainingUndefeated = [...undefeatedTeams]
     for (let i = 0; i < remainingUndefeated.length - 1; i += 2) {
       matches.push({
-        team1: remainingUndefeated[i],
-        team2: remainingUndefeated[i + 1],
+        team1: remainingUndefeated[i]!,
+        team2: remainingUndefeated[i + 1]!,
       })
     }
 
     // If there's an odd undefeated team and we have one-loss teams available
     if (remainingUndefeated.length % 2 === 1 && oneLossTeams.length > 0) {
       matches.push({
-        team1: remainingUndefeated[remainingUndefeated.length - 1],
-        team2: oneLossTeams[0],
+        team1: remainingUndefeated[remainingUndefeated.length - 1]!,
+        team2: oneLossTeams[0]!,
       })
 
       // Pair remaining one-loss teams, but only if all teams have played at least once
       if (allNonChampionTeamsHavePlayed && oneLossTeams.length > 1) {
         for (let i = 1; i < oneLossTeams.length - 1; i += 2) {
           matches.push({
-            team1: oneLossTeams[i],
-            team2: oneLossTeams[i + 1],
+            team1: oneLossTeams[i]!,
+            team2: oneLossTeams[i + 1]!,
           })
         }
       }
@@ -249,8 +249,8 @@ export default function BracketPage() {
       // Only pair one-loss teams against each other if all teams have played
       for (let i = 0; i < oneLossTeams.length - 1; i += 2) {
         matches.push({
-          team1: oneLossTeams[i],
-          team2: oneLossTeams[i + 1],
+          team1: oneLossTeams[i]!,
+          team2: oneLossTeams[i + 1]!,
         })
       }
     }
