@@ -157,7 +157,7 @@ export default function BracketPage() {
 
     // If only 2 teams left, that's the championship match
     if (activeTeams.length === 2) {
-      return [{ team1: activeTeams[0], team2: activeTeams[1] }]
+      return [{ team1: activeTeams[0]!, team2: activeTeams[1]! }]
     }
 
     // Check if champion should get a bye
@@ -185,7 +185,7 @@ export default function BracketPage() {
     if (matchResults.length > 0) {
       const mostRecentMatch = [...matchResults].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0]
+      )[0]!
       recentMatchTeamIds.add(mostRecentMatch.winner_id)
       recentMatchTeamIds.add(mostRecentMatch.loser_id)
     }
