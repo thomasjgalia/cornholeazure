@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { TABLES } from '@/lib/constants'
+import { api } from '@/lib/api'
 import { EventRow, PlayerRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,45 +49,12 @@ export default function TeamsPage() {
   async function loadEventAndTeams() {
     try {
       setLoading(true)
-      const { data: eventData, error: eventError } = await supabase
-        .from(TABLES.CORNHOLE_EVENTS)
-        .select('*')
-        .eq('id', eventId)
-        .single()
-
-      if (eventError) throw eventError
+      const [eventData, teamsData] = await Promise.all([
+        api.get<EventRow>(`/events/${eventId}`),
+        api.get<TeamWithPlayers[]>(`/teams?eventId=${eventId}`),
+      ])
       setEvent(eventData)
-
-      const { data: teamsData, error: teamsError } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_TEAMS)
-        .select('*')
-        .eq('event_id', eventId)
-
-      if (teamsError) throw teamsError
-
-      const teamsWithPlayers = await Promise.all(
-        (teamsData || []).map(async (team) => {
-          const { data: player1 } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .eq('playerid', team.player1_id)
-            .single()
-
-          const { data: player2 } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .eq('playerid', team.player2_id)
-            .single()
-
-          return {
-            ...team,
-            player1: player1 || undefined,
-            player2: player2 || undefined,
-          }
-        })
-      )
-
-      setTeams(teamsWithPlayers)
+      setTeams(teamsData)
     } catch (error) {
       toast.error('Failed to load event and teams')
       console.error(error)
@@ -99,14 +65,8 @@ export default function TeamsPage() {
 
   async function loadPlayers() {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('*')
-        .order('lastname', { ascending: true })
-        .order('firstname', { ascending: true })
-
-      if (error) throw error
-      setPlayers(data || [])
+      const data = await api.get<PlayerRow[]>('/players')
+      setPlayers(data)
     } catch (error) {
       toast.error('Failed to load players')
       console.error(error)
@@ -136,28 +96,23 @@ export default function TeamsPage() {
     }
 
     try {
-      const { error } = await supabase.from(TABLES.CORNHOLE_EVENT_TEAMS).insert({
+      await api.post('/teams', {
         event_id: Number(eventId),
         player1_id: Number(formData.player1_id),
         player2_id: Number(formData.player2_id),
         is_reigning_champion: formData.is_reigning_champion,
       })
 
-      if (error) {
-        if (error.code === '23505') {
-          toast.error('This team already exists in this event')
-        } else {
-          throw error
-        }
-        return
-      }
-
       toast.success('Team added successfully')
       setIsDialogOpen(false)
       loadEventAndTeams()
-    } catch (error) {
-      toast.error('Failed to add team')
-      console.error(error)
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        toast.error('This team already exists in this event')
+      } else {
+        toast.error('Failed to add team')
+        console.error(error)
+      }
     }
   }
 
@@ -167,12 +122,7 @@ export default function TeamsPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_TEAMS)
-        .delete()
-        .eq('id', teamId)
-
-      if (error) throw error
+      await api.del(`/teams/${teamId}`)
       toast.success('Team deleted successfully')
       loadEventAndTeams()
     } catch (error) {
@@ -183,12 +133,7 @@ export default function TeamsPage() {
 
   async function toggleChampion(teamId: number, currentStatus: boolean) {
     try {
-      const { error } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_TEAMS)
-        .update({ is_reigning_champion: !currentStatus })
-        .eq('id', teamId)
-
-      if (error) throw error
+      await api.put(`/teams/${teamId}`, { is_reigning_champion: !currentStatus })
       toast.success(
         !currentStatus ? 'Team marked as champion' : 'Champion status removed'
       )

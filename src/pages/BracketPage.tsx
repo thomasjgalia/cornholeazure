@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { TABLES } from '@/lib/constants'
+import { api } from '@/lib/api'
 import { EventRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,75 +53,33 @@ export default function BracketPage() {
     try {
       setLoading(true)
 
-      // Load event
-      const { data: eventData, error: eventError } = await supabase
-        .from(TABLES.CORNHOLE_EVENTS)
-        .select('*')
-        .eq('id', eventId)
-        .single()
+      const [eventData, teamsData, matchesData] = await Promise.all([
+        api.get<EventRow>(`/events/${eventId}`),
+        api.get<TeamWithPlayers[]>(`/teams?eventId=${eventId}`),
+        api.get<MatchResult[]>(`/matches?eventId=${eventId}`),
+      ])
 
-      if (eventError) throw eventError
       setEvent(eventData)
+      setMatchResults(matchesData)
 
-      // Load teams
-      const { data: teamsData, error: teamsError } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_TEAMS)
-        .select('*')
-        .eq('event_id', eventId)
+      // Calculate losses for each team
+      const teamsWithLosses: TeamWithLosses[] = teamsData.map((team) => {
+        const lossCount = matchesData.filter((m) => m.loser_id === team.id).length
+        const isEliminated = lossCount >= 2
+        return { ...team, lossCount, isEliminated }
+      })
 
-      if (teamsError) throw teamsError
-
-      // Load match results
-      const { data: matchesData, error: matchesError } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_MATCHES)
-        .select('id, winner_id, loser_id, created_at')
-        .eq('event_id', eventId)
-        .not('winner_id', 'is', null)
-
-      if (matchesError) throw matchesError
-      setMatchResults(matchesData || [])
-
-      // Load teams with player data
-      const teamsWithPlayers = await Promise.all(
-        (teamsData || []).map(async (team) => {
-          const { data: player1 } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .eq('playerid', team.player1_id)
-            .single()
-
-          const { data: player2 } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .eq('playerid', team.player2_id)
-            .single()
-
-          // Calculate losses for this team
-          const lossCount = (matchesData || []).filter((m) => m.loser_id === team.id).length
-          const isEliminated = lossCount >= 2
-
-          return {
-            ...team,
-            player1: player1 || undefined,
-            player2: player2 || undefined,
-            lossCount,
-            isEliminated,
-          }
-        })
-      )
-
-      setTeams(teamsWithPlayers)
+      setTeams(teamsWithLosses)
 
       // Check if tournament is complete
-      const activeTeams = teamsWithPlayers.filter((t) => !t.isEliminated)
+      const activeTeams = teamsWithLosses.filter((t) => !t.isEliminated)
       if (activeTeams.length === 1) {
         setTournamentComplete(true)
-        setChampion(activeTeams[0])
-      } else if (activeTeams.length === 0 && teamsWithPlayers.length > 0) {
-        // Edge case: all teams eliminated, find team with fewest losses
-        const sortedByLosses = [...teamsWithPlayers].sort((a, b) => a.lossCount - b.lossCount)
+        setChampion(activeTeams[0] ?? null)
+      } else if (activeTeams.length === 0 && teamsWithLosses.length > 0) {
+        const sortedByLosses = [...teamsWithLosses].sort((a, b) => a.lossCount - b.lossCount)
         setTournamentComplete(true)
-        setChampion(sortedByLosses[0])
+        setChampion(sortedByLosses[0] ?? null)
       } else {
         setTournamentComplete(false)
         setChampion(null)
@@ -133,14 +90,6 @@ export default function BracketPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  function getTeamsByLosses(losses: number) {
-    return teams.filter((t) => t.lossCount === losses && !t.isEliminated)
-  }
-
-  function getEliminatedTeams() {
-    return teams.filter((t) => t.isEliminated)
   }
 
   function getTeamMatchCount(teamId: number): number {
@@ -166,7 +115,6 @@ export default function BracketPage() {
 
     // Check if all NON-CHAMPION teams have played at least once
     const teamsRequiringFirstMatch = activeTeams.filter((t) => {
-      // Skip champion with bye - they don't need to play first round
       if (championByeEnabled && t.id === championTeam.id) {
         return false
       }
@@ -177,7 +125,6 @@ export default function BracketPage() {
     })
     const allNonChampionTeamsHavePlayed = teamsRequiringFirstMatch.length === 0
 
-    // Champion gets bye until all other teams have played once
     const shouldExcludeChampion = championByeEnabled && !allNonChampionTeamsHavePlayed
 
     // Get teams from most recent match to exclude them
@@ -190,16 +137,12 @@ export default function BracketPage() {
       recentMatchTeamIds.add(mostRecentMatch.loser_id)
     }
 
-    // Determine if we should exclude recent teams entirely
-    // Exclude them if we have enough other teams to make at least one match
     const teamsExcludingRecent = activeTeams.filter((t) => {
       if (shouldExcludeChampion && championTeam && t.id === championTeam.id) return false
       return !recentMatchTeamIds.has(t.id)
     })
     const shouldExcludeRecentTeams = teamsExcludingRecent.length >= 2
 
-    // Separate teams by loss count, excluding champion if they still have bye
-    // and excluding recent match teams if we have enough other teams
     let undefeatedTeams = activeTeams.filter((t) => {
       if (shouldExcludeChampion && championTeam && t.id === championTeam.id) return false
       if (shouldExcludeRecentTeams && recentMatchTeamIds.has(t.id)) return false
@@ -210,7 +153,6 @@ export default function BracketPage() {
       return t.lossCount === 1
     })
 
-    // Sort teams: prioritize by games played
     const sortTeams = (a: TeamWithLosses, b: TeamWithLosses) => {
       const aGames = getTeamMatchCount(a.id)
       const bGames = getTeamMatchCount(b.id)
@@ -220,7 +162,6 @@ export default function BracketPage() {
     undefeatedTeams.sort(sortTeams)
     oneLossTeams.sort(sortTeams)
 
-    // Pair up undefeated teams first
     let remainingUndefeated = [...undefeatedTeams]
     for (let i = 0; i < remainingUndefeated.length - 1; i += 2) {
       matches.push({
@@ -229,14 +170,12 @@ export default function BracketPage() {
       })
     }
 
-    // If there's an odd undefeated team and we have one-loss teams available
     if (remainingUndefeated.length % 2 === 1 && oneLossTeams.length > 0) {
       matches.push({
         team1: remainingUndefeated[remainingUndefeated.length - 1]!,
         team2: oneLossTeams[0]!,
       })
 
-      // Pair remaining one-loss teams, but only if all teams have played at least once
       if (allNonChampionTeamsHavePlayed && oneLossTeams.length > 1) {
         for (let i = 1; i < oneLossTeams.length - 1; i += 2) {
           matches.push({
@@ -246,7 +185,6 @@ export default function BracketPage() {
         }
       }
     } else if (allNonChampionTeamsHavePlayed && oneLossTeams.length >= 2) {
-      // Only pair one-loss teams against each other if all teams have played
       for (let i = 0; i < oneLossTeams.length - 1; i += 2) {
         matches.push({
           team1: oneLossTeams[i]!,
@@ -281,21 +219,16 @@ export default function BracketPage() {
 
   async function recordMatchResult(winnerId: number, loserId: number) {
     try {
-      // Insert match result
-      const { error } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_MATCHES)
-        .insert({
-          event_id: Number(eventId),
-          winner_id: winnerId,
-          loser_id: loserId,
-          round: 0, // Not used in loss-tracking system
-          match_number: matchResults.length,
-          team1_id: selectedTeams.team1?.id,
-          team2_id: selectedTeams.team2?.id,
-          is_bye: false,
-        })
-
-      if (error) throw error
+      await api.post('/matches', {
+        event_id: Number(eventId),
+        winner_id: winnerId,
+        loser_id: loserId,
+        round: 0,
+        match_number: matchResults.length,
+        team1_id: selectedTeams.team1?.id,
+        team2_id: selectedTeams.team2?.id,
+        is_bye: false,
+      })
 
       toast.success('Match result recorded')
       setIsDialogOpen(false)
@@ -312,21 +245,16 @@ export default function BracketPage() {
     loserId: number
   ) {
     try {
-      // Insert match result
-      const { error } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_MATCHES)
-        .insert({
-          event_id: Number(eventId),
-          winner_id: winnerId,
-          loser_id: loserId,
-          round: 0,
-          match_number: matchResults.length,
-          team1_id: match.team1.id,
-          team2_id: match.team2.id,
-          is_bye: false,
-        })
-
-      if (error) throw error
+      await api.post('/matches', {
+        event_id: Number(eventId),
+        winner_id: winnerId,
+        loser_id: loserId,
+        round: 0,
+        match_number: matchResults.length,
+        team1_id: match.team1.id,
+        team2_id: match.team2.id,
+        is_bye: false,
+      })
 
       toast.success('Match result recorded')
       loadTournament()
@@ -342,13 +270,7 @@ export default function BracketPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_MATCHES)
-        .delete()
-        .eq('id', matchId)
-
-      if (error) throw error
-
+      await api.del(`/matches/${matchId}`)
       toast.success('Match result deleted')
       loadTournament()
     } catch (error) {
@@ -474,12 +396,10 @@ export default function BracketPage() {
             const championTeam = teams.find((t) => t.is_reigning_champion && !t.isEliminated)
             if (!event?.champion_gets_bye || !championTeam) return null
 
-            // Check if champion has played yet
             const championHasPlayed = matchResults.some(
               (m) => m.winner_id === championTeam.id || m.loser_id === championTeam.id
             )
 
-            // Only show message if champion hasn't played yet
             if (championHasPlayed) return null
 
             return (
@@ -500,11 +420,9 @@ export default function BracketPage() {
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {[...teams]
               .sort((a, b) => {
-                // Sort by loss count first
                 if (a.lossCount !== b.lossCount) {
                   return a.lossCount - b.lossCount
                 }
-                // If same loss count, sort by wins (more wins first)
                 const aWins = matchResults.filter((m) => m.winner_id === a.id).length
                 const bWins = matchResults.filter((m) => m.winner_id === b.id).length
                 return bWins - aWins
@@ -711,13 +629,10 @@ function TeamCard({
   // Color coding based on losses
   let cardClassName = ''
   if (isEliminated || team.lossCount >= 2) {
-    // Eliminated teams - black background with white text
     cardClassName = 'bg-gray-900 text-white border-gray-700'
   } else if (team.lossCount === 1) {
-    // One loss - light red
     cardClassName = 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-900'
   } else {
-    // Undefeated - light green
     cardClassName = 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-900'
   }
 

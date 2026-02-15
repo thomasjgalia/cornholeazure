@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { TABLES } from '@/lib/constants'
+import { api } from '@/lib/api'
 import { EventRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -27,47 +26,13 @@ export default function EventDetailsPage() {
     try {
       setLoading(true)
 
-      // Load event
-      const { data: eventData, error: eventError } = await supabase
-        .from(TABLES.CORNHOLE_EVENTS)
-        .select('*')
-        .eq('id', eventId)
-        .single()
+      const [eventData, teamsData] = await Promise.all([
+        api.get<EventRow>(`/events/${eventId}`),
+        api.get<TeamWithPlayers[]>(`/teams?eventId=${eventId}`),
+      ])
 
-      if (eventError) throw eventError
       setEvent(eventData)
-
-      // Load teams
-      const { data: teamsData, error: teamsError } = await supabase
-        .from(TABLES.CORNHOLE_EVENT_TEAMS)
-        .select('*')
-        .eq('event_id', eventId)
-
-      if (teamsError) throw teamsError
-
-      const teamsWithPlayers = await Promise.all(
-        (teamsData || []).map(async (team) => {
-          const { data: player1 } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .eq('playerid', team.player1_id)
-            .single()
-
-          const { data: player2 } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .eq('playerid', team.player2_id)
-            .single()
-
-          return {
-            ...team,
-            player1: player1 || undefined,
-            player2: player2 || undefined,
-          }
-        })
-      )
-
-      setTeams(teamsWithPlayers)
+      setTeams(teamsData)
     } catch (error) {
       toast.error('Failed to load event data')
       console.error(error)

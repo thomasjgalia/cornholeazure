@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { TABLES } from '@/lib/constants'
+import { api } from '@/lib/api'
 import { EventRow, PlayerRow } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,13 +51,8 @@ export default function EventsListPage() {
   async function loadEvents() {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from(TABLES.CORNHOLE_EVENTS)
-        .select('*')
-        .order('date', { ascending: false })
-
-      if (error) throw error
-      setEvents(data || [])
+      const data = await api.get<EventRow[]>('/events')
+      setEvents(data)
     } catch (error) {
       toast.error('Failed to load events')
       console.error(error)
@@ -69,14 +63,8 @@ export default function EventsListPage() {
 
   async function loadPlayers() {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('*')
-        .order('lastname', { ascending: true })
-        .order('firstname', { ascending: true })
-
-      if (error) throw error
-      setPlayers(data || [])
+      const data = await api.get<PlayerRow[]>('/players')
+      setPlayers(data)
     } catch (error) {
       console.error('Failed to load players:', error)
     }
@@ -164,68 +152,35 @@ export default function EventsListPage() {
 
     try {
       if (editingEvent) {
-        const { error } = await supabase
-          .from(TABLES.CORNHOLE_EVENTS)
-          .update({
-            name: formData.name.trim(),
-            date: formData.date,
-            champion_gets_bye: formData.champion_gets_bye,
-          })
-          .eq('id', editingEvent.id)
-
-        if (error) throw error
+        await api.put(`/events/${editingEvent.id}`, {
+          name: formData.name.trim(),
+          date: formData.date,
+          champion_gets_bye: formData.champion_gets_bye,
+        })
         toast.success('Event updated successfully')
       } else {
-        // Create event
-        const { data: newEvent, error: eventError } = await supabase
-          .from(TABLES.CORNHOLE_EVENTS)
-          .insert({
-            name: formData.name.trim(),
-            date: formData.date,
-            champion_gets_bye: formData.champion_gets_bye,
+        // Build participant teams (shuffle and pair)
+        const shuffled = [...selectedParticipantIds].sort(() => Math.random() - 0.5)
+        const participantTeams = []
+        for (let i = 0; i < shuffled.length; i += 2) {
+          participantTeams.push({
+            player1_id: shuffled[i],
+            player2_id: shuffled[i + 1],
           })
-          .select()
-          .single()
-
-        if (eventError) throw eventError
-
-        // Create champion team if specified
-        if (hasChampionTeam && newEvent) {
-          const { error: teamError } = await supabase
-            .from(TABLES.CORNHOLE_EVENT_TEAMS)
-            .insert({
-              event_id: newEvent.id,
-              player1_id: Number(formData.champion_player1_id),
-              player2_id: Number(formData.champion_player2_id),
-              is_reigning_champion: true,
-            })
-
-          if (teamError) throw teamError
         }
 
-        // Create randomly assigned teams from participants
-        if (selectedParticipantIds.length > 0 && newEvent) {
-          // Shuffle participants randomly
-          const shuffled = [...selectedParticipantIds].sort(() => Math.random() - 0.5)
-          const teamsToCreate = []
-
-          // Pair them up into teams
-          for (let i = 0; i < shuffled.length; i += 2) {
-            teamsToCreate.push({
-              event_id: newEvent.id,
-              player1_id: shuffled[i],
-              player2_id: shuffled[i + 1],
-              is_reigning_champion: false,
-            })
-          }
-
-          const { error: teamsError } = await supabase
-            .from(TABLES.CORNHOLE_EVENT_TEAMS)
-            .insert(teamsToCreate)
-
-          if (teamsError) throw teamsError
-        }
-
+        await api.post('/events', {
+          name: formData.name.trim(),
+          date: formData.date,
+          champion_gets_bye: formData.champion_gets_bye,
+          champion_team: hasChampionTeam
+            ? {
+                player1_id: Number(formData.champion_player1_id),
+                player2_id: Number(formData.champion_player2_id),
+              }
+            : undefined,
+          participant_teams: participantTeams,
+        })
         toast.success('Event created successfully')
       }
 
@@ -243,12 +198,7 @@ export default function EventsListPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from(TABLES.CORNHOLE_EVENTS)
-        .delete()
-        .eq('id', event.id)
-
-      if (error) throw error
+      await api.del(`/events/${event.id}`)
       toast.success('Event deleted successfully')
       loadEvents()
     } catch (error) {

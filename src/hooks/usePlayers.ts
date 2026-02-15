@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { PlayerRow } from '@/types'
 import { toast } from 'sonner'
 
@@ -14,14 +14,8 @@ export function usePlayers() {
   async function loadPlayers() {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .order('lastname', { ascending: true })
-        .order('firstname', { ascending: true })
-
-      if (error) throw error
-      setPlayers(data || [])
+      const data = await api.get<PlayerRow[]>('/players')
+      setPlayers(data)
     } catch (error) {
       toast.error('Failed to load players')
       console.error(error)
@@ -39,14 +33,7 @@ export function usePlayers() {
     profile_secret?: string
   }) {
     try {
-      const { data, error } = await supabase
-        .from('players')
-        .insert([player])
-        .select()
-        .single()
-
-      if (error) throw error
-
+      const data = await api.post<PlayerRow>('/players', player)
       toast.success('Player created successfully')
       loadPlayers()
       return data
@@ -62,13 +49,7 @@ export function usePlayers() {
     updates: Partial<Omit<PlayerRow, 'playerid' | 'created_at' | 'updated_at'>>
   ) {
     try {
-      const { error } = await supabase
-        .from('players')
-        .update(updates)
-        .eq('playerid', playerid)
-
-      if (error) throw error
-
+      await api.put<PlayerRow>(`/players/${playerid}`, updates)
       toast.success('Player updated successfully')
       loadPlayers()
     } catch (error) {
@@ -80,13 +61,7 @@ export function usePlayers() {
 
   async function deletePlayer(playerid: number) {
     try {
-      const { error } = await supabase
-        .from('players')
-        .delete()
-        .eq('playerid', playerid)
-
-      if (error) throw error
-
+      await api.del(`/players/${playerid}`)
       toast.success('Player deleted successfully')
       loadPlayers()
     } catch (error) {
