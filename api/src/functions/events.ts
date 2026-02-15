@@ -9,7 +9,7 @@ app.http('events-list', {
     try {
       const pool = await getPool()
       const result = await pool.request().query(
-        'SELECT id, CAST(name AS NVARCHAR(MAX)) AS name, [date], champion_gets_bye, created_at FROM cornhole_events ORDER BY [date] DESC'
+        'SELECT id, CAST(name AS NVARCHAR(MAX)) AS name, [date], champion_gets_bye, created_at FROM cornhole_events ORDER BY CAST([date] AS DATE) DESC'
       )
       return { jsonBody: result.recordset }
     } catch (err: any) {
