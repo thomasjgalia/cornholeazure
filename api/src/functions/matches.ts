@@ -45,7 +45,7 @@ app.http('matches-create', {
         .input('is_bye', body.is_bye ? 1 : 0)
         .query(
           `INSERT INTO cornhole_event_matches (event_id, winner_id, loser_id, round, match_number, team1_id, team2_id, is_bye)
-           OUTPUT INSERTED.*
+           OUTPUT INSERTED.id, INSERTED.event_id, INSERTED.winner_id, INSERTED.loser_id, INSERTED.round, INSERTED.match_number, INSERTED.team1_id, INSERTED.team2_id, INSERTED.is_bye, INSERTED.created_at
            VALUES (@event_id, @winner_id, @loser_id, @round, @match_number, @team1_id, @team2_id, @is_bye)`
         )
       return { jsonBody: result.recordset[0] }

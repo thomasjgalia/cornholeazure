@@ -15,13 +15,21 @@ app.http('teams-list', {
       const result = await pool.request()
         .input('eventId', Number(eventId))
         .query(
-          `SELECT t.*,
-            p1.playerid AS player1_playerid, p1.firstname AS player1_firstname, p1.lastname AS player1_lastname,
-            p1.email AS player1_email, p1.phone AS player1_phone, p1.handicap AS player1_handicap,
-            p1.profile_secret AS player1_profile_secret,
-            p2.playerid AS player2_playerid, p2.firstname AS player2_firstname, p2.lastname AS player2_lastname,
-            p2.email AS player2_email, p2.phone AS player2_phone, p2.handicap AS player2_handicap,
-            p2.profile_secret AS player2_profile_secret
+          `SELECT t.id, t.event_id, t.player1_id, t.player2_id, t.is_reigning_champion, t.created_at,
+            p1.playerid AS player1_playerid,
+            CAST(p1.firstname AS NVARCHAR(MAX)) AS player1_firstname,
+            CAST(p1.lastname AS NVARCHAR(MAX)) AS player1_lastname,
+            CAST(p1.email AS NVARCHAR(MAX)) AS player1_email,
+            CAST(p1.phone AS NVARCHAR(MAX)) AS player1_phone,
+            p1.handicap AS player1_handicap,
+            CAST(p1.profile_secret AS NVARCHAR(MAX)) AS player1_profile_secret,
+            p2.playerid AS player2_playerid,
+            CAST(p2.firstname AS NVARCHAR(MAX)) AS player2_firstname,
+            CAST(p2.lastname AS NVARCHAR(MAX)) AS player2_lastname,
+            CAST(p2.email AS NVARCHAR(MAX)) AS player2_email,
+            CAST(p2.phone AS NVARCHAR(MAX)) AS player2_phone,
+            p2.handicap AS player2_handicap,
+            CAST(p2.profile_secret AS NVARCHAR(MAX)) AS player2_profile_secret
            FROM cornhole_event_teams t
            LEFT JOIN players p1 ON t.player1_id = p1.playerid
            LEFT JOIN players p2 ON t.player2_id = p2.playerid
@@ -77,7 +85,7 @@ app.http('teams-create', {
         .input('is_reigning_champion', body.is_reigning_champion ? 1 : 0)
         .query(
           `INSERT INTO cornhole_event_teams (event_id, player1_id, player2_id, is_reigning_champion)
-           OUTPUT INSERTED.*
+           OUTPUT INSERTED.id, INSERTED.event_id, INSERTED.player1_id, INSERTED.player2_id, INSERTED.is_reigning_champion, INSERTED.created_at
            VALUES (@event_id, @player1_id, @player2_id, @is_reigning_champion)`
         )
       return { jsonBody: result.recordset[0] }
@@ -104,7 +112,7 @@ app.http('teams-update', {
         .input('is_reigning_champion', body.is_reigning_champion ? 1 : 0)
         .query(
           `UPDATE cornhole_event_teams SET is_reigning_champion = @is_reigning_champion
-           OUTPUT INSERTED.*
+           OUTPUT INSERTED.id, INSERTED.event_id, INSERTED.player1_id, INSERTED.player2_id, INSERTED.is_reigning_champion, INSERTED.created_at
            WHERE id = @id`
         )
       if (result.recordset.length === 0) {

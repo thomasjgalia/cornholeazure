@@ -9,7 +9,7 @@ app.http('events-list', {
     try {
       const pool = await getPool()
       const result = await pool.request().query(
-        'SELECT * FROM cornhole_events ORDER BY date DESC'
+        'SELECT id, CAST(name AS NVARCHAR(MAX)) AS name, [date], champion_gets_bye, created_at FROM cornhole_events ORDER BY [date] DESC'
       )
       return { jsonBody: result.recordset }
     } catch (err: any) {
@@ -28,7 +28,7 @@ app.http('events-get', {
       const pool = await getPool()
       const result = await pool.request()
         .input('id', id)
-        .query('SELECT * FROM cornhole_events WHERE id = @id')
+        .query('SELECT id, CAST(name AS NVARCHAR(MAX)) AS name, [date], champion_gets_bye, created_at FROM cornhole_events WHERE id = @id')
       if (result.recordset.length === 0) {
         return { status: 404, jsonBody: { message: 'Event not found' } }
       }
@@ -57,8 +57,8 @@ app.http('events-create', {
           .input('date', body.date)
           .input('champion_gets_bye', body.champion_gets_bye ? 1 : 0)
           .query(
-            `INSERT INTO cornhole_events (name, date, champion_gets_bye)
-             OUTPUT INSERTED.*
+            `INSERT INTO cornhole_events (name, [date], champion_gets_bye)
+             OUTPUT INSERTED.id, CAST(INSERTED.name AS NVARCHAR(MAX)) AS name, INSERTED.[date], INSERTED.champion_gets_bye, INSERTED.created_at
              VALUES (@name, @date, @champion_gets_bye)`
           )
         const newEvent = eventResult.recordset[0]
@@ -118,8 +118,8 @@ app.http('events-update', {
         .input('date', body.date)
         .input('champion_gets_bye', body.champion_gets_bye ? 1 : 0)
         .query(
-          `UPDATE cornhole_events SET name = @name, date = @date, champion_gets_bye = @champion_gets_bye
-           OUTPUT INSERTED.*
+          `UPDATE cornhole_events SET name = @name, [date] = @date, champion_gets_bye = @champion_gets_bye
+           OUTPUT INSERTED.id, CAST(INSERTED.name AS NVARCHAR(MAX)) AS name, INSERTED.[date], INSERTED.champion_gets_bye, INSERTED.created_at
            WHERE id = @id`
         )
       if (result.recordset.length === 0) {

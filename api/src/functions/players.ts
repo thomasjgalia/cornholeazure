@@ -9,7 +9,10 @@ app.http('players-list', {
     try {
       const pool = await getPool()
       const result = await pool.request().query(
-        'SELECT * FROM players ORDER BY CAST(lastname AS NVARCHAR(MAX)) ASC, CAST(firstname AS NVARCHAR(MAX)) ASC'
+        `SELECT playerid, CAST(firstname AS NVARCHAR(MAX)) AS firstname, CAST(lastname AS NVARCHAR(MAX)) AS lastname,
+         CAST(email AS NVARCHAR(MAX)) AS email, CAST(phone AS NVARCHAR(MAX)) AS phone, handicap,
+         CAST(profile_secret AS NVARCHAR(MAX)) AS profile_secret, created_at, updated_at
+         FROM players ORDER BY CAST(lastname AS NVARCHAR(MAX)) ASC, CAST(firstname AS NVARCHAR(MAX)) ASC`
       )
       return { jsonBody: result.recordset }
     } catch (err: any) {
@@ -35,7 +38,9 @@ app.http('players-create', {
         .input('profile_secret', body.profile_secret || null)
         .query(
           `INSERT INTO players (firstname, lastname, email, phone, handicap, profile_secret)
-           OUTPUT INSERTED.*
+           OUTPUT INSERTED.playerid, CAST(INSERTED.firstname AS NVARCHAR(MAX)) AS firstname, CAST(INSERTED.lastname AS NVARCHAR(MAX)) AS lastname,
+           CAST(INSERTED.email AS NVARCHAR(MAX)) AS email, CAST(INSERTED.phone AS NVARCHAR(MAX)) AS phone, INSERTED.handicap,
+           CAST(INSERTED.profile_secret AS NVARCHAR(MAX)) AS profile_secret, INSERTED.created_at, INSERTED.updated_at
            VALUES (@firstname, @lastname, @email, @phone, @handicap, @profile_secret)`
         )
       return { jsonBody: result.recordset[0] }
@@ -65,7 +70,9 @@ app.http('players-update', {
         .query(
           `UPDATE players SET firstname = @firstname, lastname = @lastname, email = @email,
            phone = @phone, handicap = @handicap, profile_secret = @profile_secret
-           OUTPUT INSERTED.*
+           OUTPUT INSERTED.playerid, CAST(INSERTED.firstname AS NVARCHAR(MAX)) AS firstname, CAST(INSERTED.lastname AS NVARCHAR(MAX)) AS lastname,
+           CAST(INSERTED.email AS NVARCHAR(MAX)) AS email, CAST(INSERTED.phone AS NVARCHAR(MAX)) AS phone, INSERTED.handicap,
+           CAST(INSERTED.profile_secret AS NVARCHAR(MAX)) AS profile_secret, INSERTED.created_at, INSERTED.updated_at
            WHERE playerid = @id`
         )
       if (result.recordset.length === 0) {
