@@ -25,6 +25,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from 'sonner'
 import { Plus, Pencil, Trash2, Calendar, Users, Trophy } from 'lucide-react'
 import { format } from 'date-fns'
@@ -37,6 +38,7 @@ export default function EventsListPage() {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<EventRow | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     date: '',
@@ -188,13 +190,10 @@ export default function EventsListPage() {
     }
   }
 
-  async function handleDelete(event: EventRow) {
-    if (!confirm(`Are you sure you want to delete "${event.name}"?`)) {
-      return
-    }
-
+  async function confirmDelete() {
+    if (!deleteTarget) return
     try {
-      await api.del(`/events/${event.id}`)
+      await api.del(`/events/${deleteTarget.id}`)
       toast.success('Event deleted successfully')
       setIsDialogOpen(false)
       loadEvents()
@@ -532,7 +531,7 @@ export default function EventsListPage() {
                   type="button"
                   variant="destructive"
                   className="mr-auto"
-                  onClick={() => handleDelete(editingEvent)}
+                  onClick={() => setDeleteTarget(editingEvent)}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
@@ -552,6 +551,15 @@ export default function EventsListPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete event?"
+        description={deleteTarget ? `Are you sure you want to delete "${deleteTarget.name}"?` : ''}
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

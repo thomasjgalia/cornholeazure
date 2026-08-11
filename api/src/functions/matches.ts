@@ -18,7 +18,8 @@ app.http('matches-list', {
         .query(
           `SELECT id, winner_id, loser_id, created_at
            FROM cornhole_event_matches
-           WHERE event_id = @eventId AND winner_id IS NOT NULL`
+           WHERE event_id = @eventId AND winner_id IS NOT NULL
+           ORDER BY id ASC`
         )
       return { jsonBody: result.recordset }
     } catch (err: any) {

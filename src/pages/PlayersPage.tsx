@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 
 export default function PlayersPage() {
@@ -23,6 +24,7 @@ export default function PlayersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<PlayerRow | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PlayerRow | null>(null)
   const [formData, setFormData] = useState({
     firstname: '',
     lastname: '',
@@ -98,17 +100,10 @@ export default function PlayersPage() {
     }
   }
 
-  async function handleDelete(player: PlayerRow) {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete ${player.firstname} ${player.lastname}?`
-      )
-    ) {
-      return
-    }
-
+  async function confirmDelete() {
+    if (!deleteTarget) return
     try {
-      await deletePlayer(player.playerid)
+      await deletePlayer(deleteTarget.playerid)
       setIsDialogOpen(false)
     } catch (error) {
       // Error already handled by hook
@@ -266,7 +261,7 @@ export default function PlayersPage() {
                   type="button"
                   variant="destructive"
                   className="mr-auto"
-                  onClick={() => handleDelete(editingPlayer)}
+                  onClick={() => setDeleteTarget(editingPlayer)}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
@@ -280,6 +275,19 @@ export default function PlayersPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete player?"
+        description={
+          deleteTarget
+            ? `Are you sure you want to delete ${deleteTarget.firstname} ${deleteTarget.lastname}?`
+            : ''
+        }
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

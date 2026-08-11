@@ -7,6 +7,7 @@ import { EventRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from 'sonner'
 import { ArrowLeft, Trophy, X, Trash2 } from 'lucide-react'
 import {
@@ -45,6 +46,7 @@ export default function BracketPage() {
   })
   const [tournamentComplete, setTournamentComplete] = useState(false)
   const [champion, setChampion] = useState<TeamWithLosses | null>(null)
+  const [deleteMatchId, setDeleteMatchId] = useState<number | null>(null)
 
   useEffect(() => {
     if (eventId) {
@@ -142,10 +144,11 @@ export default function BracketPage() {
     // already makes an instant rematch impossible, and also resting the
     // loser can unfairly bench a team with a low game count just because
     // they happened to lose their most recent (possibly very first) game.
+    // Sort by id (auto-incrementing) rather than created_at -- created_at
+    // isn't reliably populated in this DB, but id order always matches
+    // insertion/play order.
     const mostRecentMatch = matchResults.length > 0
-      ? [...matchResults].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )[0]!
+      ? [...matchResults].sort((a, b) => b.id - a.id)[0]!
       : null
     const recentWinnerId = mostRecentMatch?.winner_id
 
@@ -292,13 +295,10 @@ export default function BracketPage() {
     }
   }
 
-  async function deleteMatchResult(matchId: number) {
-    if (!confirm('Are you sure you want to delete this match result? This will affect the tournament standings.')) {
-      return
-    }
-
+  async function confirmDeleteMatchResult() {
+    if (deleteMatchId == null) return
     try {
-      await api.del(`/matches/${matchId}`)
+      await api.del(`/matches/${deleteMatchId}`)
       toast.success('Match result deleted')
       loadTournament()
     } catch (error) {
@@ -461,7 +461,7 @@ export default function BracketPage() {
                 <CardContent className="p-4">
                   <div className="space-y-2">
                     {[...matchResults]
-                      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                      .sort((a, b) => b.id - a.id)
                       .map((match, index) => {
                         const winner = teams.find((t) => t.id === match.winner_id)
                         const loser = teams.find((t) => t.id === match.loser_id)
@@ -479,7 +479,7 @@ export default function BracketPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => deleteMatchResult(match.id)}
+                                onClick={() => setDeleteMatchId(match.id)}
                                 className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -627,6 +627,15 @@ export default function BracketPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteMatchId != null}
+        onOpenChange={(open) => !open && setDeleteMatchId(null)}
+        title="Delete match result?"
+        description="This will affect the tournament standings."
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteMatchResult}
+      />
     </div>
   )
 }

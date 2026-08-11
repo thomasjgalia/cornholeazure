@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from 'sonner'
 import { Plus, Trash2, ArrowLeft, Trophy, Shuffle } from 'lucide-react'
 
@@ -37,6 +38,8 @@ export default function TeamsPage() {
   const [matchCount, setMatchCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [reshuffling, setReshuffling] = useState(false)
+  const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false)
+  const [deleteTeamId, setDeleteTeamId] = useState<number | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState({
     player1_id: '',
@@ -123,13 +126,10 @@ export default function TeamsPage() {
     }
   }
 
-  async function handleDelete(teamId: number) {
-    if (!confirm('Are you sure you want to delete this team?')) {
-      return
-    }
-
+  async function confirmDeleteTeam() {
+    if (deleteTeamId == null) return
     try {
-      await api.del(`/teams/${teamId}`)
+      await api.del(`/teams/${deleteTeamId}`)
       toast.success('Team deleted successfully')
       loadEventAndTeams()
     } catch (error) {
@@ -151,21 +151,17 @@ export default function TeamsPage() {
     }
   }
 
-  async function handleReshuffle() {
+  function handleReshuffleClick() {
     const nonChampionTeams = teams.filter((t) => !t.is_reigning_champion)
     if (nonChampionTeams.length < 2) {
       toast.error('Need at least 2 non-champion teams to reshuffle')
       return
     }
+    setReshuffleConfirmOpen(true)
+  }
 
-    if (
-      !confirm(
-        'Reshuffle will randomly reassign all non-champion teams. The reigning champion team is left as-is. Continue?'
-      )
-    ) {
-      return
-    }
-
+  async function confirmReshuffle() {
+    const nonChampionTeams = teams.filter((t) => !t.is_reigning_champion)
     setReshuffling(true)
     try {
       const playerIds = nonChampionTeams.flatMap((t) => [t.player1_id, t.player2_id])
@@ -208,7 +204,7 @@ export default function TeamsPage() {
           <p className="text-muted-foreground">Manage teams for this event</p>
         </div>
         {isProfileClaimed && matchCount === 0 && teams.filter((t) => !t.is_reigning_champion).length >= 2 && (
-          <Button variant="outline" onClick={handleReshuffle} disabled={reshuffling}>
+          <Button variant="outline" onClick={handleReshuffleClick} disabled={reshuffling}>
             <Shuffle className="mr-2 h-4 w-4" />
             {reshuffling ? 'Reshuffling...' : 'Reshuffle'}
           </Button>
@@ -269,7 +265,7 @@ export default function TeamsPage() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDelete(team.id)}
+                        onClick={() => setDeleteTeamId(team.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -369,6 +365,25 @@ export default function TeamsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTeamId != null}
+        onOpenChange={(open) => !open && setDeleteTeamId(null)}
+        title="Delete team?"
+        description="Are you sure you want to delete this team?"
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteTeam}
+      />
+
+      <ConfirmDialog
+        open={reshuffleConfirmOpen}
+        onOpenChange={setReshuffleConfirmOpen}
+        title="Reshuffle teams?"
+        description="This will randomly reassign all non-champion teams. The reigning champion team is left as-is."
+        confirmLabel="Reshuffle"
+        confirmVariant="default"
+        onConfirm={confirmReshuffle}
+      />
     </div>
   )
 }
