@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { formatTeamName } from '@/lib/utils'
 import { EventRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -96,6 +97,11 @@ export default function BracketPage() {
 
   function getTeamMatchCount(teamId: number): number {
     return matchResults.filter((m) => m.winner_id === teamId || m.loser_id === teamId).length
+  }
+
+  function getTeamRecord(team: TeamWithLosses): string {
+    const wins = matchResults.filter((m) => m.winner_id === team.id).length
+    return `${wins}/${team.lossCount}`
   }
 
   function getSuggestedMatches(): Array<{ team1: TeamWithLosses; team2: TeamWithLosses }> {
@@ -241,31 +247,6 @@ export default function BracketPage() {
     }
   }
 
-  async function recordQuickMatchResult(
-    match: { team1: TeamWithLosses; team2: TeamWithLosses },
-    winnerId: number,
-    loserId: number
-  ) {
-    try {
-      await api.post('/matches', {
-        event_id: Number(eventId),
-        winner_id: winnerId,
-        loser_id: loserId,
-        round: 0,
-        match_number: matchResults.length,
-        team1_id: match.team1.id,
-        team2_id: match.team2.id,
-        is_bye: false,
-      })
-
-      toast.success('Match result recorded')
-      loadTournament()
-    } catch (error) {
-      toast.error('Failed to record match result')
-      console.error(error)
-    }
-  }
-
   async function deleteMatchResult(matchId: number) {
     if (!confirm('Are you sure you want to delete this match result? This will affect the tournament standings.')) {
       return
@@ -332,13 +313,10 @@ export default function BracketPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold mb-2">
-              {champion && `${champion.player1?.firstname}/${champion.player2?.firstname}`}
-            </p>
-            <p className="text-sm text-muted-foreground mb-2">
-              {champion && `${champion.player1?.firstname} ${champion.player1?.lastname} & ${champion.player2?.firstname} ${champion.player2?.lastname}`}
+              {champion && formatTeamName(champion)}
             </p>
             <p className="text-muted-foreground">
-              {champion && `Final record: ${matchResults.filter((m) => m.winner_id === champion.id).length} wins, ${champion.lossCount} losses`}
+              {champion && `Final record: ${getTeamRecord(champion)}`}
             </p>
           </CardContent>
         </Card>
@@ -347,50 +325,29 @@ export default function BracketPage() {
           {/* Current Matchups */}
           {getSuggestedMatches().length > 0 && (
             <Card className="border-blue-500 bg-blue-50 dark:bg-blue-950">
-              <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">
+              <CardContent className="p-0">
+                <h3 className="text-sm font-semibold px-3 pt-3 pb-1">
                   Current Matchups ({getSuggestedMatches().length})
                 </h3>
-                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                <div className="divide-y divide-blue-200 dark:divide-blue-900">
                   {getSuggestedMatches().map((match, index) => (
-                    <Card key={index} className="bg-white dark:bg-gray-900">
-                      <CardContent className="p-2">
-                        {isProfileClaimed && (
-                          <p className="text-xs text-muted-foreground text-center mb-2">Click winner</p>
-                        )}
-                        <div className="flex items-stretch gap-2">
-                          <button
-                            className="flex-1 flex flex-col items-center p-2 rounded-md border-2 border-transparent enabled:hover:border-green-500 enabled:hover:bg-green-50 dark:enabled:hover:bg-green-950 transition-all enabled:cursor-pointer disabled:cursor-default"
-                            disabled={!isProfileClaimed}
-                            onClick={() => recordQuickMatchResult(match, match.team1.id, match.team2.id)}
-                          >
-                            <p className="font-semibold text-xs text-center leading-tight">
-                              {match.team1.player1?.firstname}/{match.team1.player2?.firstname}
-                            </p>
-                            <Badge variant="secondary" className="mt-1.5 text-xs">
-                              {match.team1.lossCount}L
-                            </Badge>
-                          </button>
-
-                          <div className="flex items-center px-1">
-                            <span className="text-xs font-bold text-muted-foreground">vs</span>
-                          </div>
-
-                          <button
-                            className="flex-1 flex flex-col items-center p-2 rounded-md border-2 border-transparent enabled:hover:border-green-500 enabled:hover:bg-green-50 dark:enabled:hover:bg-green-950 transition-all enabled:cursor-pointer disabled:cursor-default"
-                            disabled={!isProfileClaimed}
-                            onClick={() => recordQuickMatchResult(match, match.team2.id, match.team1.id)}
-                          >
-                            <p className="font-semibold text-xs text-center leading-tight">
-                              {match.team2.player1?.firstname}/{match.team2.player2?.firstname}
-                            </p>
-                            <Badge variant="secondary" className="mt-1.5 text-xs">
-                              {match.team2.lossCount}L
-                            </Badge>
-                          </button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <button
+                      key={index}
+                      type="button"
+                      disabled={!isProfileClaimed}
+                      onClick={() => openMatchDialog(match)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left enabled:hover:bg-blue-100 dark:enabled:hover:bg-blue-900/40 enabled:cursor-pointer disabled:cursor-default"
+                    >
+                      <span className="flex-1 truncate">
+                        {formatTeamName(match.team1)}{' '}
+                        <span className="text-muted-foreground">({getTeamRecord(match.team1)})</span>
+                      </span>
+                      <span className="text-xs font-bold text-muted-foreground shrink-0">vs</span>
+                      <span className="flex-1 truncate text-right">
+                        {formatTeamName(match.team2)}{' '}
+                        <span className="text-muted-foreground">({getTeamRecord(match.team2)})</span>
+                      </span>
+                    </button>
                   ))}
                 </div>
               </CardContent>
@@ -414,7 +371,7 @@ export default function BracketPage() {
                   <div className="flex items-center gap-2">
                     <Trophy className="h-5 w-5 text-yellow-600" />
                     <p className="font-semibold">
-                      {championTeam.player1?.firstname}/{championTeam.player2?.firstname} (Reigning Champions) have a bye until all other teams play
+                      {formatTeamName(championTeam)} (Reigning Champions) have a bye until all other teams play
                     </p>
                   </div>
                 </CardContent>
@@ -461,11 +418,11 @@ export default function BracketPage() {
                           <div key={match.id} className="flex items-center gap-2 text-sm py-2 border-b last:border-0">
                             <span className="text-muted-foreground w-16">Match {matchResults.length - index}</span>
                             <span className="font-semibold flex-1">
-                              {winner && `${winner.player1?.firstname}/${winner.player2?.firstname}`}
+                              {winner && formatTeamName(winner)}
                             </span>
                             <span className="text-muted-foreground">def.</span>
                             <span className="flex-1">
-                              {loser && `${loser.player1?.firstname}/${loser.player2?.firstname}`}
+                              {loser && formatTeamName(loser)}
                             </span>
                             {isProfileClaimed && (
                               <Button
@@ -505,9 +462,9 @@ export default function BracketPage() {
               {selectedTeams.team1 ? (
                 <div className="flex items-center gap-2 p-3 border rounded-md">
                   <span className="flex-1">
-                    {selectedTeams.team1.player1?.firstname}/{selectedTeams.team1.player2?.firstname}
+                    {formatTeamName(selectedTeams.team1)}
                   </span>
-                  <Badge variant="secondary">{selectedTeams.team1.lossCount}L</Badge>
+                  <Badge variant="secondary">{getTeamRecord(selectedTeams.team1)}</Badge>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -528,9 +485,9 @@ export default function BracketPage() {
                         onClick={() => selectTeam(team)}
                       >
                         <span className="flex-1 text-left">
-                          {team.player1?.firstname}/{team.player2?.firstname}
+                          {formatTeamName(team)}
                         </span>
-                        <Badge variant="secondary" className="ml-2">{team.lossCount}L</Badge>
+                        <Badge variant="secondary" className="ml-2">{getTeamRecord(team)}</Badge>
                       </Button>
                     ))}
                 </div>
@@ -543,9 +500,9 @@ export default function BracketPage() {
               {selectedTeams.team2 ? (
                 <div className="flex items-center gap-2 p-3 border rounded-md">
                   <span className="flex-1">
-                    {selectedTeams.team2.player1?.firstname}/{selectedTeams.team2.player2?.firstname}
+                    {formatTeamName(selectedTeams.team2)}
                   </span>
-                  <Badge variant="secondary">{selectedTeams.team2.lossCount}L</Badge>
+                  <Badge variant="secondary">{getTeamRecord(selectedTeams.team2)}</Badge>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -566,9 +523,9 @@ export default function BracketPage() {
                         onClick={() => selectTeam(team)}
                       >
                         <span className="flex-1 text-left">
-                          {team.player1?.firstname}/{team.player2?.firstname}
+                          {formatTeamName(team)}
                         </span>
-                        <Badge variant="secondary" className="ml-2">{team.lossCount}L</Badge>
+                        <Badge variant="secondary" className="ml-2">{getTeamRecord(team)}</Badge>
                       </Button>
                     ))}
                 </div>
@@ -588,10 +545,10 @@ export default function BracketPage() {
                     }
                   >
                     <span className="font-semibold">
-                      {selectedTeams.team1.player1?.firstname}/{selectedTeams.team1.player2?.firstname}
+                      {formatTeamName(selectedTeams.team1)}
                     </span>
                     <span className="text-xs opacity-80">
-                      Current: {selectedTeams.team1.lossCount} losses
+                      Current record: {getTeamRecord(selectedTeams.team1)}
                     </span>
                   </Button>
                   <Button
@@ -602,10 +559,10 @@ export default function BracketPage() {
                     }
                   >
                     <span className="font-semibold">
-                      {selectedTeams.team2.player1?.firstname}/{selectedTeams.team2.player2?.firstname}
+                      {formatTeamName(selectedTeams.team2)}
                     </span>
                     <span className="text-xs opacity-80">
-                      Current: {selectedTeams.team2.lossCount} losses
+                      Current record: {getTeamRecord(selectedTeams.team2)}
                     </span>
                   </Button>
                 </div>
@@ -649,7 +606,7 @@ function TeamCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center justify-between">
           <span className="flex-1">
-            {team.player1?.firstname}/{team.player2?.firstname}
+            {formatTeamName(team)}
           </span>
           {team.is_reigning_champion && (
             <Badge variant="default" className="ml-2">
@@ -657,9 +614,6 @@ function TeamCard({
             </Badge>
           )}
         </CardTitle>
-        <p className={`text-xs ${isEliminated || team.lossCount >= 2 ? 'text-gray-400' : 'text-muted-foreground'}`}>
-          {team.player1?.firstname} {team.player1?.lastname} & {team.player2?.firstname} {team.player2?.lastname}
-        </p>
       </CardHeader>
       <CardContent className="pb-3">
         <div className="flex items-center gap-3 text-sm">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { shufflePairs } from '@/lib/utils'
 import { EventRow, PlayerRow } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -162,16 +163,7 @@ export default function EventsListPage() {
         toast.success('Event updated successfully')
       } else {
         const hasChampionTeam = formData.champion_player1_id && formData.champion_player2_id
-
-        // Build participant teams (shuffle and pair)
-        const shuffled = [...selectedParticipantIds].sort(() => Math.random() - 0.5)
-        const participantTeams = []
-        for (let i = 0; i < shuffled.length; i += 2) {
-          participantTeams.push({
-            player1_id: shuffled[i],
-            player2_id: shuffled[i + 1],
-          })
-        }
+        const participantTeams = shufflePairs(selectedParticipantIds)
 
         await api.post('/events', {
           name: formData.name.trim(),

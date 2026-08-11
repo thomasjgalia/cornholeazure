@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 
@@ -141,16 +140,15 @@ export default function PlayersPage() {
       </div>
 
       {loading ? (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="flex items-center justify-between gap-3 py-3">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-5 w-10" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-0 divide-y">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flex items-center px-3 py-2">
+                <Skeleton className="h-4 w-32" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       ) : filteredPlayers.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -162,27 +160,30 @@ export default function PlayersPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPlayers.map((player) => (
-            <Card key={player.playerid}>
-              <CardContent className="flex items-center justify-between gap-3 py-3">
-                <span className="font-medium truncate">
+        <Card>
+          <CardContent className="p-0 divide-y">
+            {filteredPlayers.map((player) => (
+              <div
+                key={player.playerid}
+                className="flex items-center justify-between gap-3 px-3 py-2"
+              >
+                <span className="truncate">
                   {player.firstname} {player.lastname}
                 </span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {player.handicap !== null && player.handicap !== undefined && (
-                    <Badge variant="secondary">{player.handicap}</Badge>
-                  )}
-                  {isProfileClaimed && (
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(player)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                {isProfileClaimed && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 h-7 w-7 p-0"
+                    onClick={() => openEditDialog(player)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
