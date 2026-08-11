@@ -1,51 +1,51 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { PlayerRow } from '@/types'
+import { api } from '@/lib/api'
+import {
+  getStoredSession,
+  setStoredSession,
+  clearStoredSession,
+  StoredSession,
+  StoredSessionPlayer,
+} from '@/lib/api'
 
 interface AuthContextType {
-  claimedPlayer: PlayerRow | null
-  claimProfile: (player: PlayerRow) => void
+  claimedPlayer: StoredSessionPlayer | null
+  claimProfile: (playerid: number, secret: string) => Promise<void>
   releaseProfile: () => void
   isProfileClaimed: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const STORAGE_KEY = 'cornhole_claimed_profile'
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [claimedPlayer, setClaimedPlayer] = useState<PlayerRow | null>(null)
+  const [session, setSession] = useState<StoredSession | null>(null)
 
-  // Load claimed profile from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        const player = JSON.parse(stored) as PlayerRow
-        setClaimedPlayer(player)
-      } catch (error) {
-        console.error('Failed to parse stored profile:', error)
-        localStorage.removeItem(STORAGE_KEY)
-      }
-    }
+    setSession(getStoredSession())
   }, [])
 
-  const claimProfile = (player: PlayerRow) => {
-    setClaimedPlayer(player)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(player))
+  async function claimProfile(playerid: number, secret: string) {
+    const result = await api.post<{ token: string; player: StoredSessionPlayer }>(
+      '/auth/claim',
+      { playerid, secret }
+    )
+    const newSession: StoredSession = { token: result.token, player: result.player }
+    setStoredSession(newSession)
+    setSession(newSession)
   }
 
-  const releaseProfile = () => {
-    setClaimedPlayer(null)
-    localStorage.removeItem(STORAGE_KEY)
+  function releaseProfile() {
+    clearStoredSession()
+    setSession(null)
   }
 
   return (
     <AuthContext.Provider
       value={{
-        claimedPlayer,
+        claimedPlayer: session?.player ?? null,
         claimProfile,
         releaseProfile,
-        isProfileClaimed: !!claimedPlayer,
+        isProfileClaimed: !!session,
       }}
     >
       {children}

@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
 import { getPool } from '../db'
+import { requireAuth, isRejection } from '../lib/auth'
 
 app.http('teams-list', {
   methods: ['GET'],
@@ -22,14 +23,12 @@ app.http('teams-list', {
             CAST(p1.email AS NVARCHAR(MAX)) AS player1_email,
             CAST(p1.phone AS NVARCHAR(MAX)) AS player1_phone,
             p1.handicap AS player1_handicap,
-            CAST(p1.profile_secret AS NVARCHAR(MAX)) AS player1_profile_secret,
             p2.playerid AS player2_playerid,
             CAST(p2.firstname AS NVARCHAR(MAX)) AS player2_firstname,
             CAST(p2.lastname AS NVARCHAR(MAX)) AS player2_lastname,
             CAST(p2.email AS NVARCHAR(MAX)) AS player2_email,
             CAST(p2.phone AS NVARCHAR(MAX)) AS player2_phone,
-            p2.handicap AS player2_handicap,
-            CAST(p2.profile_secret AS NVARCHAR(MAX)) AS player2_profile_secret
+            p2.handicap AS player2_handicap
            FROM cornhole_event_teams t
            LEFT JOIN players p1 ON t.player1_id = p1.playerid
            LEFT JOIN players p2 ON t.player2_id = p2.playerid
@@ -50,7 +49,6 @@ app.http('teams-list', {
           email: row.player1_email,
           phone: row.player1_phone,
           handicap: row.player1_handicap,
-          profile_secret: row.player1_profile_secret,
         } : undefined,
         player2: row.player2_playerid ? {
           playerid: row.player2_playerid,
@@ -59,7 +57,6 @@ app.http('teams-list', {
           email: row.player2_email,
           phone: row.player2_phone,
           handicap: row.player2_handicap,
-          profile_secret: row.player2_profile_secret,
         } : undefined,
       }))
 
@@ -75,6 +72,8 @@ app.http('teams-create', {
   authLevel: 'anonymous',
   route: 'teams',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const body = await req.json() as any
       const pool = await getPool()
@@ -103,6 +102,8 @@ app.http('teams-update', {
   authLevel: 'anonymous',
   route: 'teams/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
       const body = await req.json() as any
@@ -130,6 +131,8 @@ app.http('teams-delete', {
   authLevel: 'anonymous',
   route: 'teams/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
       const pool = await getPool()

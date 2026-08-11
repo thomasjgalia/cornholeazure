@@ -7,7 +7,11 @@ export interface PlayerRow {
   email?: string
   handicap?: number
   phone?: string
+  // Write-only: sent on create/update, never returned by the API.
   profile_secret?: string
+  // Returned by the API instead of profile_secret, so the UI can show
+  // whether a secret is set without ever seeing its value.
+  has_secret?: boolean
   created_at?: string
   updated_at?: string
 }

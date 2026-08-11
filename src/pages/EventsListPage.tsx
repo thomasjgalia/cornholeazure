@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { EventRow, PlayerRow } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +30,7 @@ import { format } from 'date-fns'
 
 export default function EventsListPage() {
   const navigate = useNavigate()
+  const { isProfileClaimed } = useAuth()
   const [events, setEvents] = useState<EventRow[]>([])
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -200,6 +202,7 @@ export default function EventsListPage() {
     try {
       await api.del(`/events/${event.id}`)
       toast.success('Event deleted successfully')
+      setIsDialogOpen(false)
       loadEvents()
     } catch (error) {
       toast.error('Failed to delete event')
@@ -211,10 +214,12 @@ export default function EventsListPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Events</h1>
-        <Button onClick={openAddDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Event
-        </Button>
+        {isProfileClaimed && (
+          <Button onClick={openAddDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Event
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -262,8 +267,8 @@ export default function EventsListPage() {
                   <Calendar className="h-4 w-4" />
                   {format(new Date(event.date), 'MMMM d, yyyy')}
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {isProfileClaimed && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -272,44 +277,34 @@ export default function EventsListPage() {
                         openEditDialog(event)
                       }}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="mr-1 h-4 w-4" />
+                      Edit
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDelete(event)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/events/${event.id}/teams`)
-                      }}
-                    >
-                      <Users className="mr-1 h-4 w-4" />
-                      Teams
-                    </Button>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/events/${event.id}/bracket`)
-                      }}
-                    >
-                      <Trophy className="mr-1 h-4 w-4" />
-                      Manage
-                    </Button>
-                  </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={isProfileClaimed ? '' : 'col-span-2'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/events/${event.id}/teams`)
+                    }}
+                  >
+                    <Users className="mr-1 h-4 w-4" />
+                    Teams
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="col-span-2"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/events/${event.id}/bracket`)
+                    }}
+                  >
+                    <Trophy className="mr-1 h-4 w-4" />
+                    Manage
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -504,6 +499,17 @@ export default function EventsListPage() {
               )}
             </div>
             <DialogFooter className="flex-shrink-0 px-6 pb-6 pt-4">
+              {editingEvent && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="mr-auto"
+                  onClick={() => handleDelete(editingEvent)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"

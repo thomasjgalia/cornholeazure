@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { EventRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +32,7 @@ interface MatchResult {
 export default function BracketPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
+  const { isProfileClaimed } = useAuth()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [teams, setTeams] = useState<TeamWithLosses[]>([])
   const [matchResults, setMatchResults] = useState<MatchResult[]>([])
@@ -297,7 +299,7 @@ export default function BracketPage() {
           <h1 className="text-3xl font-bold">{event?.name || 'Event'} - Tournament</h1>
           <p className="text-muted-foreground">Loss-tracking double elimination</p>
         </div>
-        {!tournamentComplete && teams.length >= 2 && (
+        {isProfileClaimed && !tournamentComplete && teams.length >= 2 && (
           <Button variant="outline" onClick={() => openMatchDialog()}>
             Record Match
           </Button>
@@ -353,10 +355,13 @@ export default function BracketPage() {
                   {getSuggestedMatches().map((match, index) => (
                     <Card key={index} className="bg-white dark:bg-gray-900">
                       <CardContent className="p-2">
-                        <p className="text-xs text-muted-foreground text-center mb-2">Click winner</p>
+                        {isProfileClaimed && (
+                          <p className="text-xs text-muted-foreground text-center mb-2">Click winner</p>
+                        )}
                         <div className="flex items-stretch gap-2">
                           <button
-                            className="flex-1 flex flex-col items-center p-2 rounded-md border-2 border-transparent hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-950 transition-all cursor-pointer"
+                            className="flex-1 flex flex-col items-center p-2 rounded-md border-2 border-transparent enabled:hover:border-green-500 enabled:hover:bg-green-50 dark:enabled:hover:bg-green-950 transition-all enabled:cursor-pointer disabled:cursor-default"
+                            disabled={!isProfileClaimed}
                             onClick={() => recordQuickMatchResult(match, match.team1.id, match.team2.id)}
                           >
                             <p className="font-semibold text-xs text-center leading-tight">
@@ -372,7 +377,8 @@ export default function BracketPage() {
                           </div>
 
                           <button
-                            className="flex-1 flex flex-col items-center p-2 rounded-md border-2 border-transparent hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-950 transition-all cursor-pointer"
+                            className="flex-1 flex flex-col items-center p-2 rounded-md border-2 border-transparent enabled:hover:border-green-500 enabled:hover:bg-green-50 dark:enabled:hover:bg-green-950 transition-all enabled:cursor-pointer disabled:cursor-default"
+                            disabled={!isProfileClaimed}
                             onClick={() => recordQuickMatchResult(match, match.team2.id, match.team1.id)}
                           >
                             <p className="font-semibold text-xs text-center leading-tight">
@@ -461,14 +467,16 @@ export default function BracketPage() {
                             <span className="flex-1">
                               {loser && `${loser.player1?.firstname}/${loser.player2?.firstname}`}
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteMatchResult(match.id)}
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isProfileClaimed && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteMatchResult(match.id)}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         )
                       })}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { EventRow, PlayerRow, TeamWithPlayers } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,6 +29,7 @@ import { Plus, Trash2, ArrowLeft, Trophy } from 'lucide-react'
 export default function TeamsPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
+  const { isProfileClaimed } = useAuth()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [teams, setTeams] = useState<TeamWithPlayers[]>([])
   const [players, setPlayers] = useState<PlayerRow[]>([])
@@ -158,10 +160,12 @@ export default function TeamsPage() {
           <h1 className="text-3xl font-bold">{event?.name || 'Event'}</h1>
           <p className="text-muted-foreground">Manage teams for this event</p>
         </div>
-        <Button onClick={openAddDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Team
-        </Button>
+        {isProfileClaimed && (
+          <Button onClick={openAddDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Team
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -209,22 +213,25 @@ export default function TeamsPage() {
                     {team.player2?.firstname} {team.player2?.lastname}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => toggleChampion(team.id, team.is_reigning_champion)}
-                  >
-                    <Trophy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(team.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                {isProfileClaimed && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleChampion(team.id, team.is_reigning_champion)}
+                    >
+                      <Trophy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(team.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

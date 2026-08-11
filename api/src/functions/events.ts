@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
 import { getPool } from '../db'
+import { requireAuth, isRejection } from '../lib/auth'
 
 app.http('events-list', {
   methods: ['GET'],
@@ -44,6 +45,8 @@ app.http('events-create', {
   authLevel: 'anonymous',
   route: 'events',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const body = await req.json() as any
       const pool = await getPool()
@@ -108,6 +111,8 @@ app.http('events-update', {
   authLevel: 'anonymous',
   route: 'events/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
       const body = await req.json() as any
@@ -137,6 +142,8 @@ app.http('events-delete', {
   authLevel: 'anonymous',
   route: 'events/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
       const pool = await getPool()

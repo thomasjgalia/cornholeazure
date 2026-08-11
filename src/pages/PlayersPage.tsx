@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { usePlayers } from '@/hooks/usePlayers'
+import { useAuth } from '@/lib/auth'
 import { PlayerRow } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 
 export default function PlayersPage() {
   const { players, loading, createPlayer, updatePlayer, deletePlayer } = usePlayers()
+  const { isProfileClaimed } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<PlayerRow | null>(null)
@@ -108,6 +110,7 @@ export default function PlayersPage() {
 
     try {
       await deletePlayer(player.playerid)
+      setIsDialogOpen(false)
     } catch (error) {
       // Error already handled by hook
     }
@@ -117,10 +120,12 @@ export default function PlayersPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Players</h1>
-        <Button onClick={openAddDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Player
-        </Button>
+        {isProfileClaimed && (
+          <Button onClick={openAddDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Player
+          </Button>
+        )}
       </div>
 
       <div className="mb-6">
@@ -136,15 +141,12 @@ export default function PlayersPage() {
       </div>
 
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
             <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-48 mb-2" />
-                <Skeleton className="h-4 w-40" />
+              <CardContent className="flex items-center justify-between gap-3 py-3">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-5 w-10" />
               </CardContent>
             </Card>
           ))}
@@ -160,40 +162,22 @@ export default function PlayersPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {filteredPlayers.map((player) => (
             <Card key={player.playerid}>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>
-                    {player.firstname} {player.lastname}
-                  </span>
-                  {player.profile_secret && (
-                    <Badge variant="secondary" className="text-xs">
-                      Secret
-                    </Badge>
+              <CardContent className="flex items-center justify-between gap-3 py-3">
+                <span className="font-medium truncate">
+                  {player.firstname} {player.lastname}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {player.handicap !== null && player.handicap !== undefined && (
+                    <Badge variant="secondary">{player.handicap}</Badge>
                   )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {player.email && (
-                  <p className="text-sm text-muted-foreground mb-1">{player.email}</p>
-                )}
-                {player.phone && (
-                  <p className="text-sm text-muted-foreground mb-1">{player.phone}</p>
-                )}
-                {player.handicap !== null && player.handicap !== undefined && (
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Handicap: {player.handicap}
-                  </p>
-                )}
-                <div className="flex gap-2 mt-3">
-                  <Button variant="outline" size="sm" onClick={() => openEditDialog(player)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(player)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {isProfileClaimed && (
+                    <Button variant="outline" size="sm" onClick={() => openEditDialog(player)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -276,6 +260,17 @@ export default function PlayersPage() {
               </div>
             </div>
             <DialogFooter>
+              {editingPlayer && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="mr-auto"
+                  onClick={() => handleDelete(editingPlayer)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              )}
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>

@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
 import { getPool } from '../db'
+import { requireAuth, isRejection } from '../lib/auth'
 
 app.http('players-list', {
   methods: ['GET'],
@@ -11,7 +12,7 @@ app.http('players-list', {
       const result = await pool.request().query(
         `SELECT playerid, CAST(firstname AS NVARCHAR(MAX)) AS firstname, CAST(lastname AS NVARCHAR(MAX)) AS lastname,
          CAST(email AS NVARCHAR(MAX)) AS email, CAST(phone AS NVARCHAR(MAX)) AS phone, handicap,
-         CAST(profile_secret AS NVARCHAR(MAX)) AS profile_secret, created_at, updated_at
+         CAST(CASE WHEN profile_secret IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS has_secret, created_at, updated_at
          FROM players ORDER BY CAST(lastname AS NVARCHAR(MAX)) ASC, CAST(firstname AS NVARCHAR(MAX)) ASC`
       )
       return { jsonBody: result.recordset }
@@ -26,6 +27,8 @@ app.http('players-create', {
   authLevel: 'anonymous',
   route: 'players',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const body = await req.json() as any
       const pool = await getPool()
@@ -40,7 +43,7 @@ app.http('players-create', {
           `INSERT INTO players (firstname, lastname, email, phone, handicap, profile_secret)
            OUTPUT INSERTED.playerid, CAST(INSERTED.firstname AS NVARCHAR(MAX)) AS firstname, CAST(INSERTED.lastname AS NVARCHAR(MAX)) AS lastname,
            CAST(INSERTED.email AS NVARCHAR(MAX)) AS email, CAST(INSERTED.phone AS NVARCHAR(MAX)) AS phone, INSERTED.handicap,
-           CAST(INSERTED.profile_secret AS NVARCHAR(MAX)) AS profile_secret, INSERTED.created_at, INSERTED.updated_at
+           CAST(CASE WHEN INSERTED.profile_secret IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS has_secret, INSERTED.created_at, INSERTED.updated_at
            VALUES (@firstname, @lastname, @email, @phone, @handicap, @profile_secret)`
         )
       return { jsonBody: result.recordset[0] }
@@ -55,6 +58,8 @@ app.http('players-update', {
   authLevel: 'anonymous',
   route: 'players/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
       const body = await req.json() as any
@@ -72,7 +77,7 @@ app.http('players-update', {
            phone = @phone, handicap = @handicap, profile_secret = @profile_secret
            OUTPUT INSERTED.playerid, CAST(INSERTED.firstname AS NVARCHAR(MAX)) AS firstname, CAST(INSERTED.lastname AS NVARCHAR(MAX)) AS lastname,
            CAST(INSERTED.email AS NVARCHAR(MAX)) AS email, CAST(INSERTED.phone AS NVARCHAR(MAX)) AS phone, INSERTED.handicap,
-           CAST(INSERTED.profile_secret AS NVARCHAR(MAX)) AS profile_secret, INSERTED.created_at, INSERTED.updated_at
+           CAST(CASE WHEN INSERTED.profile_secret IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS has_secret, INSERTED.created_at, INSERTED.updated_at
            WHERE playerid = @id`
         )
       if (result.recordset.length === 0) {
@@ -90,6 +95,8 @@ app.http('players-delete', {
   authLevel: 'anonymous',
   route: 'players/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    const session = requireAuth(req)
+    if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
       const pool = await getPool()

@@ -58,32 +58,14 @@ export default function ClaimProfilePage() {
 
     setLoading(true)
     try {
-      // Find the selected player from the already-loaded list
-      const player = players.find((p) => p.playerid === parseInt(selectedPlayerId))
+      const playerid = parseInt(selectedPlayerId)
+      const player = players.find((p) => p.playerid === playerid)
 
-      if (!player) {
-        toast.error('Player not found')
-        return
-      }
-
-      // Check if player has a profile secret set
-      if (!player.profile_secret) {
-        toast.error('This profile does not have a secret set. Contact the tournament organizer.')
-        return
-      }
-
-      // Validate the secret (case-insensitive for user convenience)
-      if (player.profile_secret.toLowerCase() !== secret.trim().toLowerCase()) {
-        toast.error('Invalid secret code')
-        return
-      }
-
-      // Success! Claim the profile
-      claimProfile(player)
-      toast.success(`Welcome, ${player.firstname}!`)
+      await claimProfile(playerid, secret.trim())
+      toast.success(`Welcome, ${player?.firstname ?? 'back'}!`)
       navigate('/')
     } catch (error) {
-      toast.error('Failed to claim profile')
+      toast.error('Invalid player or secret code')
       console.error(error)
     } finally {
       setLoading(false)

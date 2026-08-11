@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1F6B3A"/>
+      <stop offset="100%" stop-color="#0E3D20"/>
+    </linearGradient>
+    <linearGradient id="boardTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E3B37B"/>
+      <stop offset="100%" stop-color="#C88F52"/>
+    </linearGradient>
+    <linearGradient id="boardFace" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#9C6A34"/>
+      <stop offset="100%" stop-color="#7A4F24"/>
+    </linearGradient>
+    <radialGradient id="hole" cx="50%" cy="42%" r="60%">
+      <stop offset="0%" stop-color="#3A2213"/>
+      <stop offset="100%" stop-color="#160C06"/>
+    </radialGradient>
+    <linearGradient id="bag" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E14B3D"/>
+      <stop offset="100%" stop-color="#A62B20"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- soft ground shadow -->
+  <ellipse cx="512" cy="760" rx="300" ry="46" fill="#000000" opacity="0.22"/>
+
+  <!-- board legs -->
+  <rect x="330" y="660" width="26" height="80" rx="6" fill="#5C3B1E"/>
+  <rect x="668" y="660" width="26" height="80" rx="6" fill="#5C3B1E"/>
+
+  <!-- board front face (thickness) -->
+  <path d="M 250 660 L 774 660 L 730 720 L 294 720 Z" fill="url(#boardFace)"/>
+
+  <!-- board top (perspective trapezoid) -->
+  <path d="M 190 660 L 834 660 L 750 340 L 274 340 Z" fill="url(#boardTop)" stroke="#7A4F24" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- wood plank lines -->
+  <g stroke="#B57F45" stroke-width="6" opacity="0.55">
+    <path d="M 262 570 L 786 570"/>
+    <path d="M 297 470 L 750 470"/>
+  </g>
+
+  <!-- hole -->
+  <ellipse cx="512" cy="452" rx="76" ry="46" fill="url(#hole)"/>
+  <ellipse cx="512" cy="452" rx="76" ry="46" fill="none" stroke="#5C3B1E" stroke-width="8"/>
+
+  <!-- motion arc -->
+  <path d="M 300 210 Q 430 130 560 205" fill="none" stroke="#F4D58D" stroke-width="12" stroke-linecap="round" stroke-dasharray="2 34" opacity="0.9"/>
+
+  <!-- bean bag mid-air -->
+  <g transform="translate(618,232) rotate(18)">
+    <rect x="-72" y="-72" width="144" height="144" rx="26" fill="url(#bag)" stroke="#7A1F17" stroke-width="6"/>
+    <path d="M -72 -24 L 72 -24 M -72 24 L 72 24" stroke="#7A1F17" stroke-width="6" opacity="0.6"/>
+  </g>
+</svg>
