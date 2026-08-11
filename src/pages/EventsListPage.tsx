@@ -122,20 +122,20 @@ export default function EventsListPage() {
       return
     }
 
-    // Validate champion team if bye is enabled
-    const hasChampionTeam = formData.champion_player1_id && formData.champion_player2_id
-    if (formData.champion_gets_bye && !hasChampionTeam) {
-      toast.error('Please select both players for the reigning champion team')
-      return
-    }
-
-    if (hasChampionTeam && formData.champion_player1_id === formData.champion_player2_id) {
-      toast.error('Champion team players must be different')
-      return
-    }
-
-    // Validate participants when creating event
+    // Champion team + participants are only editable when creating a new
+    // event -- the edit dialog locks them to what the event already has.
     if (!editingEvent) {
+      const hasChampionTeam = formData.champion_player1_id && formData.champion_player2_id
+      if (formData.champion_gets_bye && !hasChampionTeam) {
+        toast.error('Please select both players for the reigning champion team')
+        return
+      }
+
+      if (hasChampionTeam && formData.champion_player1_id === formData.champion_player2_id) {
+        toast.error('Champion team players must be different')
+        return
+      }
+
       if (selectedParticipantIds.length === 0) {
         toast.error('Please select at least 4 players to participate (2 teams)')
         return
@@ -161,6 +161,8 @@ export default function EventsListPage() {
         })
         toast.success('Event updated successfully')
       } else {
+        const hasChampionTeam = formData.champion_player1_id && formData.champion_player2_id
+
         // Build participant teams (shuffle and pair)
         const shuffled = [...selectedParticipantIds].sort(() => Math.random() - 0.5)
         const participantTeams = []
