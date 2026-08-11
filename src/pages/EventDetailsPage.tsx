@@ -73,7 +73,7 @@ export default function EventDetailsPage() {
                   <Users className="h-4 w-4 text-muted-foreground" />
                   <span>{teams.length} teams registered</span>
                 </div>
-                {event?.champion_gets_bye && (
+                {!!event?.champion_gets_bye && (
                   <div className="flex items-center gap-2">
                     <Trophy className="h-4 w-4 text-muted-foreground" />
                     <span>Reigning champion gets first-round bye</span>

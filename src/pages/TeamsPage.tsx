@@ -249,7 +249,7 @@ export default function TeamsPage() {
               >
                 <span className="truncate">{formatTeamName(team)}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  {team.is_reigning_champion && (
+                  {!!team.is_reigning_champion && (
                     <Badge variant="default">
                       <Trophy className="h-3 w-3 mr-1" />
                       Champion

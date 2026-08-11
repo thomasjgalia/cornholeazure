@@ -90,7 +90,7 @@ export default function EventsListPage() {
     setEditingEvent(event)
     setFormData({
       name: event.name,
-      date: event.date,
+      date: format(new Date(event.date), 'yyyy-MM-dd'),
       champion_gets_bye: event.champion_gets_bye,
       champion_player1_id: '',
       champion_player2_id: '',
@@ -249,7 +249,7 @@ export default function EventsListPage() {
               <CardHeader>
                 <CardTitle className="flex items-start justify-between">
                   <span>{event.name}</span>
-                  {event.champion_gets_bye && (
+                  {!!event.champion_gets_bye && (
                     <Badge variant="secondary" className="ml-2">
                       Bye
                     </Badge>
@@ -344,6 +344,40 @@ export default function EventsListPage() {
                   required
                 />
               </div>
+
+              {editingEvent && (
+                <div className="border-t pt-3 mt-1 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="champion_gets_bye_edit"
+                      type="checkbox"
+                      checked={formData.champion_gets_bye}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          champion_gets_bye: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="champion_gets_bye_edit" className="font-normal">
+                      Reigning champion gets first-game bye
+                    </Label>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setIsDialogOpen(false)
+                      navigate(`/events/${editingEvent.id}/teams`)
+                    }}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    Manage Teams (reshuffle, add/remove, set champion)
+                  </Button>
+                </div>
+              )}
 
               {!editingEvent && (
                 <>

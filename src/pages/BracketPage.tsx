@@ -135,29 +135,38 @@ export default function BracketPage() {
 
     const shouldExcludeChampion = championByeEnabled && !allNonChampionTeamsHavePlayed
 
-    // Get teams from most recent match to exclude them
-    const recentMatchTeamIds = new Set<number>()
-    if (matchResults.length > 0) {
-      const mostRecentMatch = [...matchResults].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0]!
-      recentMatchTeamIds.add(mostRecentMatch.winner_id)
-      recentMatchTeamIds.add(mostRecentMatch.loser_id)
-    }
+    // Find the most recent match's winner so they can be kept out of the
+    // next suggested matchup when there's any other valid pairing available
+    // -- otherwise the team that just won keeps getting sent right back in.
+    // The loser is deliberately NOT also rested: excluding the winner alone
+    // already makes an instant rematch impossible, and also resting the
+    // loser can unfairly bench a team with a low game count just because
+    // they happened to lose their most recent (possibly very first) game.
+    const mostRecentMatch = matchResults.length > 0
+      ? [...matchResults].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0]!
+      : null
+    const recentWinnerId = mostRecentMatch?.winner_id
 
-    const teamsExcludingRecent = activeTeams.filter((t) => {
-      if (shouldExcludeChampion && championTeam && t.id === championTeam.id) return false
-      return !recentMatchTeamIds.has(t.id)
-    })
-    const shouldExcludeRecentTeams = teamsExcludingRecent.length >= 2
+    const teamsExcludingWinner = activeTeams.filter(
+      (t) =>
+        !(shouldExcludeChampion && championTeam && t.id === championTeam.id) &&
+        t.id !== recentWinnerId
+    )
+
+    const excludedTeamIds = new Set<number>()
+    if (recentWinnerId != null && teamsExcludingWinner.length >= 2) {
+      excludedTeamIds.add(recentWinnerId)
+    }
 
     let undefeatedTeams = activeTeams.filter((t) => {
       if (shouldExcludeChampion && championTeam && t.id === championTeam.id) return false
-      if (shouldExcludeRecentTeams && recentMatchTeamIds.has(t.id)) return false
+      if (excludedTeamIds.has(t.id)) return false
       return t.lossCount === 0
     })
     let oneLossTeams = activeTeams.filter((t) => {
-      if (shouldExcludeRecentTeams && recentMatchTeamIds.has(t.id)) return false
+      if (excludedTeamIds.has(t.id)) return false
       return t.lossCount === 1
     })
 
@@ -201,6 +210,17 @@ export default function BracketPage() {
       }
     }
 
+    // Safety net: if the last winner still ended up in a matchup (no way to
+    // avoid it), push that matchup to the bottom of the list rather than
+    // leaving it at the top.
+    if (recentWinnerId != null) {
+      matches.sort((a, b) => {
+        const aHasWinner = a.team1.id === recentWinnerId || a.team2.id === recentWinnerId
+        const bHasWinner = b.team1.id === recentWinnerId || b.team2.id === recentWinnerId
+        return Number(aHasWinner) - Number(bHasWinner)
+      })
+    }
+
     return matches
   }
 
@@ -240,6 +260,31 @@ export default function BracketPage() {
 
       toast.success('Match result recorded')
       setIsDialogOpen(false)
+      loadTournament()
+    } catch (error) {
+      toast.error('Failed to record match result')
+      console.error(error)
+    }
+  }
+
+  async function recordQuickMatchResult(
+    match: { team1: TeamWithLosses; team2: TeamWithLosses },
+    winnerId: number,
+    loserId: number
+  ) {
+    try {
+      await api.post('/matches', {
+        event_id: Number(eventId),
+        winner_id: winnerId,
+        loser_id: loserId,
+        round: 0,
+        match_number: matchResults.length,
+        team1_id: match.team1.id,
+        team2_id: match.team2.id,
+        is_bye: false,
+      })
+
+      toast.success('Match result recorded')
       loadTournament()
     } catch (error) {
       toast.error('Failed to record match result')
@@ -331,23 +376,27 @@ export default function BracketPage() {
                 </h3>
                 <div className="divide-y divide-blue-200 dark:divide-blue-900">
                   {getSuggestedMatches().map((match, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      disabled={!isProfileClaimed}
-                      onClick={() => openMatchDialog(match)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left enabled:hover:bg-blue-100 dark:enabled:hover:bg-blue-900/40 enabled:cursor-pointer disabled:cursor-default"
-                    >
-                      <span className="flex-1 truncate">
+                    <div key={index} className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <button
+                        type="button"
+                        disabled={!isProfileClaimed}
+                        onClick={() => recordQuickMatchResult(match, match.team1.id, match.team2.id)}
+                        className="flex-1 truncate text-left rounded px-1 -mx-1 enabled:hover:bg-blue-100 dark:enabled:hover:bg-blue-900/40 enabled:cursor-pointer disabled:cursor-default"
+                      >
                         {formatTeamName(match.team1)}{' '}
                         <span className="text-muted-foreground">({getTeamRecord(match.team1)})</span>
-                      </span>
+                      </button>
                       <span className="text-xs font-bold text-muted-foreground shrink-0">vs</span>
-                      <span className="flex-1 truncate text-right">
-                        {formatTeamName(match.team2)}{' '}
-                        <span className="text-muted-foreground">({getTeamRecord(match.team2)})</span>
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!isProfileClaimed}
+                        onClick={() => recordQuickMatchResult(match, match.team2.id, match.team1.id)}
+                        className="flex-1 truncate text-right rounded px-1 -mx-1 enabled:hover:bg-blue-100 dark:enabled:hover:bg-blue-900/40 enabled:cursor-pointer disabled:cursor-default"
+                      >
+                        <span className="text-muted-foreground">({getTeamRecord(match.team2)})</span>{' '}
+                        {formatTeamName(match.team2)}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </CardContent>
@@ -380,25 +429,27 @@ export default function BracketPage() {
           })()}
 
           {/* All Teams - sorted by loss count */}
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {[...teams]
-              .sort((a, b) => {
-                if (a.lossCount !== b.lossCount) {
-                  return a.lossCount - b.lossCount
-                }
-                const aWins = matchResults.filter((m) => m.winner_id === a.id).length
-                const bWins = matchResults.filter((m) => m.winner_id === b.id).length
-                return bWins - aWins
-              })
-              .map((team) => (
-                <TeamCard
-                  key={team.id}
-                  team={team}
-                  matchResults={matchResults}
-                  isEliminated={team.isEliminated}
-                />
-              ))}
-          </div>
+          <Card>
+            <CardContent className="p-0 divide-y">
+              {[...teams]
+                .sort((a, b) => {
+                  if (a.lossCount !== b.lossCount) {
+                    return a.lossCount - b.lossCount
+                  }
+                  const aWins = matchResults.filter((m) => m.winner_id === a.id).length
+                  const bWins = matchResults.filter((m) => m.winner_id === b.id).length
+                  return bWins - aWins
+                })
+                .map((team) => (
+                  <TeamRow
+                    key={team.id}
+                    team={team}
+                    matchResults={matchResults}
+                    isEliminated={team.isEliminated}
+                  />
+                ))}
+            </CardContent>
+          </Card>
 
           {/* Match History */}
           {matchResults.length > 0 && (
@@ -580,7 +631,7 @@ export default function BracketPage() {
   )
 }
 
-function TeamCard({
+function TeamRow({
   team,
   matchResults,
   isEliminated = false,
@@ -592,39 +643,28 @@ function TeamCard({
   const wins = matchResults.filter((m) => m.winner_id === team.id).length
 
   // Color coding based on losses
-  let cardClassName = ''
+  let rowClassName = ''
   if (isEliminated || team.lossCount >= 2) {
-    cardClassName = 'bg-gray-900 text-white border-gray-700'
+    rowClassName = 'bg-gray-900 text-white'
   } else if (team.lossCount === 1) {
-    cardClassName = 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-900'
+    rowClassName = 'bg-red-50 dark:bg-red-950'
   } else {
-    cardClassName = 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-900'
+    rowClassName = 'bg-green-50 dark:bg-green-950'
   }
 
   return (
-    <Card className={cardClassName}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center justify-between">
-          <span className="flex-1">
-            {formatTeamName(team)}
-          </span>
-          {team.is_reigning_champion && (
-            <Badge variant="default" className="ml-2">
-              <Trophy className="h-3 w-3" />
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pb-3">
-        <div className="flex items-center gap-3 text-sm">
-          <Badge variant={team.lossCount === 0 ? 'default' : team.lossCount === 1 ? 'secondary' : 'destructive'}>
-            {team.lossCount} {team.lossCount === 1 ? 'Loss' : 'Losses'}
+    <div className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${rowClassName}`}>
+      <span className="truncate">{formatTeamName(team)}</span>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={isEliminated || team.lossCount >= 2 ? 'text-gray-400' : 'text-muted-foreground'}>
+          {wins}/{team.lossCount}
+        </span>
+        {team.is_reigning_champion ? (
+          <Badge variant="default" className="h-5 px-1.5">
+            <Trophy className="h-3 w-3" />
           </Badge>
-          <span className={isEliminated || team.lossCount >= 2 ? 'text-gray-400' : 'text-muted-foreground'}>
-            {wins} {wins === 1 ? 'Win' : 'Wins'}
-          </span>
-        </div>
-      </CardContent>
-    </Card>
+        ) : null}
+      </div>
+    </div>
   )
 }
