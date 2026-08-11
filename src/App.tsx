@@ -16,7 +16,7 @@ export default function App() {
         >
           <div className="container flex h-14 items-center justify-between gap-4">
             <Link to="/" className="font-semibold">
-              Cornhole Tournament Manager
+              SOL Cornhole
             </Link>
             <nav className="flex gap-4 text-sm items-center">
               <NavLink
