@@ -47,6 +47,11 @@ export default function BracketPage() {
   const [tournamentComplete, setTournamentComplete] = useState(false)
   const [champion, setChampion] = useState<TeamWithLosses | null>(null)
   const [deleteMatchId, setDeleteMatchId] = useState<number | null>(null)
+  const [pendingQuickResult, setPendingQuickResult] = useState<{
+    match: { team1: TeamWithLosses; team2: TeamWithLosses }
+    winnerId: number
+    loserId: number
+  } | null>(null)
 
   useEffect(() => {
     if (eventId) {
@@ -380,7 +385,9 @@ export default function BracketPage() {
                       <button
                         type="button"
                         disabled={!isProfileClaimed}
-                        onClick={() => recordQuickMatchResult(match, match.team1.id, match.team2.id)}
+                        onClick={() =>
+                          setPendingQuickResult({ match, winnerId: match.team1.id, loserId: match.team2.id })
+                        }
                         className="flex-1 truncate text-left rounded px-1 -mx-1 enabled:hover:bg-blue-100 dark:enabled:hover:bg-blue-900/40 enabled:cursor-pointer disabled:cursor-default"
                       >
                         {formatTeamName(match.team1)}{' '}
@@ -390,7 +397,9 @@ export default function BracketPage() {
                       <button
                         type="button"
                         disabled={!isProfileClaimed}
-                        onClick={() => recordQuickMatchResult(match, match.team2.id, match.team1.id)}
+                        onClick={() =>
+                          setPendingQuickResult({ match, winnerId: match.team2.id, loserId: match.team1.id })
+                        }
                         className="flex-1 truncate text-right rounded px-1 -mx-1 enabled:hover:bg-blue-100 dark:enabled:hover:bg-blue-900/40 enabled:cursor-pointer disabled:cursor-default"
                       >
                         <span className="text-muted-foreground">({getTeamRecord(match.team2)})</span>{' '}
@@ -635,6 +644,27 @@ export default function BracketPage() {
         description="This will affect the tournament standings."
         confirmLabel="Delete"
         onConfirm={confirmDeleteMatchResult}
+      />
+
+      <ConfirmDialog
+        open={pendingQuickResult != null}
+        onOpenChange={(open) => !open && setPendingQuickResult(null)}
+        title="Record match result"
+        description={
+          pendingQuickResult
+            ? `Mark ${formatTeamName(
+                pendingQuickResult.winnerId === pendingQuickResult.match.team1.id
+                  ? pendingQuickResult.match.team1
+                  : pendingQuickResult.match.team2
+              )} winner of this match?`
+            : ''
+        }
+        confirmLabel="Confirm"
+        confirmVariant="default"
+        onConfirm={() => {
+          if (!pendingQuickResult) return
+          recordQuickMatchResult(pendingQuickResult.match, pendingQuickResult.winnerId, pendingQuickResult.loserId)
+        }}
       />
     </div>
   )
