@@ -296,7 +296,7 @@ export default function EventsListPage() {
                     }}
                   >
                     <Trophy className="mr-1 h-4 w-4" />
-                    Manage
+                    Play
                   </Button>
                 </div>
               </CardContent>
