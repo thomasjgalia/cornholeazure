@@ -7,7 +7,10 @@ import { TableClient, odata } from '@azure/data-tables'
 // means all teams share one partition, which is what lets batch-creating a
 // new event's initial teams be a real atomic transaction (see
 // createTeamsBatch below).
-const TABLE_NAME = 'Teams'
+// Named distinctly (not just "Teams") since this table lives in the same
+// storage account as golfazure's own Teams table - matches the SQL schema's
+// cornhole_event_teams naming, which existed for the exact same reason.
+const TABLE_NAME = 'CornholeEventTeams'
 const PARTITION_KEY = 'team'
 
 export type TeamRecord = {

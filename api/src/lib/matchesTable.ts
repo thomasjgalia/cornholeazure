@@ -7,7 +7,10 @@ import { TableClient, odata } from '@azure/data-tables'
 // reliably populated). Global sequential ids still preserve that ordering
 // correctly for any single event's subset of matches, since ids only ever
 // increase - no per-event partitioning needed for this to hold.
-const TABLE_NAME = 'Matches'
+// Named to match the SQL schema's cornhole_event_matches - didn't actually
+// collide with golfazure (its table is "Scores"), but naming it distinctly
+// on purpose avoids relying on that being a coincidence.
+const TABLE_NAME = 'CornholeEventMatches'
 const PARTITION_KEY = 'match'
 
 export type MatchRecord = {

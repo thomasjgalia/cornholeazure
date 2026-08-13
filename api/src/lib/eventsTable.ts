@@ -1,6 +1,10 @@
 import { TableClient, odata } from '@azure/data-tables'
 
-const TABLE_NAME = 'Events'
+// Named distinctly (not just "Events") since this table lives in the same
+// storage account as golfazure's own Events table - matches the SQL schema's
+// cornhole_events naming, which existed for the exact same reason. Only
+// Players is intentionally shared between the two apps.
+const TABLE_NAME = 'CornholeEvents'
 const PARTITION_KEY = 'event'
 
 export type EventRecord = {
