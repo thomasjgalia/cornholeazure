@@ -1,6 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
-import { getPool } from '../db'
 import { signSession } from '../lib/auth'
+import { getPlayer } from '../lib/playersTable'
 
 app.http('auth-claim', {
   methods: ['POST'],
@@ -16,17 +16,7 @@ app.http('auth-claim', {
         return { status: 400, jsonBody: { message: 'playerid and secret are required' } }
       }
 
-      const pool = await getPool()
-      const result = await pool.request()
-        .input('id', playerid)
-        .query(
-          `SELECT playerid, CAST(firstname AS NVARCHAR(MAX)) AS firstname, CAST(lastname AS NVARCHAR(MAX)) AS lastname,
-           CAST(email AS NVARCHAR(MAX)) AS email, CAST(phone AS NVARCHAR(MAX)) AS phone, handicap,
-           CAST(profile_secret AS NVARCHAR(MAX)) AS profile_secret
-           FROM players WHERE playerid = @id`
-        )
-
-      const player = result.recordset[0]
+      const player = await getPlayer(playerid)
       if (!player || !player.profile_secret || player.profile_secret.toLowerCase() !== secret.toLowerCase()) {
         return { status: 401, jsonBody: { message: 'Invalid player or secret' } }
       }
