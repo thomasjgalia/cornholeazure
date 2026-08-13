@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
-import { getPool } from '../db'
 import { requireAuth, isRejection } from '../lib/auth'
+import { listEvents, getEvent, createEvent, updateEvent, deleteEvent } from '../lib/eventsTable'
+import { createTeamsBatch, deleteTeamsForEvent } from '../lib/teamsTable'
 
 app.http('events-list', {
   methods: ['GET'],
@@ -8,11 +9,8 @@ app.http('events-list', {
   route: 'events',
   handler: async (_req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
     try {
-      const pool = await getPool()
-      const result = await pool.request().query(
-        'SELECT id, CAST(name AS NVARCHAR(MAX)) AS name, [date], champion_gets_bye, created_at FROM cornhole_events ORDER BY CAST([date] AS DATE) DESC'
-      )
-      return { jsonBody: result.recordset }
+      const events = await listEvents()
+      return { jsonBody: events }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
     }
@@ -25,15 +23,9 @@ app.http('events-get', {
   route: 'events/{id:int}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
     try {
-      const id = Number(req.params.id)
-      const pool = await getPool()
-      const result = await pool.request()
-        .input('id', id)
-        .query('SELECT id, CAST(name AS NVARCHAR(MAX)) AS name, [date], champion_gets_bye, created_at FROM cornhole_events WHERE id = @id')
-      if (result.recordset.length === 0) {
-        return { status: 404, jsonBody: { message: 'Event not found' } }
-      }
-      return { jsonBody: result.recordset[0] }
+      const event = await getEvent(Number(req.params.id))
+      if (!event) return { status: 404, jsonBody: { message: 'Event not found' } }
+      return { jsonBody: event }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
     }
@@ -48,58 +40,44 @@ app.http('events-create', {
     const session = requireAuth(req)
     if (isRejection(session)) return session
     try {
-      const body = await req.json() as any
-      const pool = await getPool()
-      const transaction = pool.transaction()
-      await transaction.begin()
+      const body = (await req.json()) as any
 
-      try {
-        // Create event
-        const eventResult = await transaction.request()
-          .input('name', body.name)
-          .input('date', body.date)
-          .input('champion_gets_bye', body.champion_gets_bye ? 1 : 0)
-          .query(
-            `INSERT INTO cornhole_events (name, [date], champion_gets_bye)
-             OUTPUT INSERTED.id, CAST(INSERTED.name AS NVARCHAR(MAX)) AS name, INSERTED.[date], INSERTED.champion_gets_bye, INSERTED.created_at
-             VALUES (@name, @date, @champion_gets_bye)`
-          )
-        const newEvent = eventResult.recordset[0]
+      // Event row first, then all of its initial teams (champion +
+      // participants) as one atomic batch - see teamsTable.createTeamsBatch.
+      // If the batch fails, the event exists with zero teams rather than a
+      // fully rolled-back nothing (Table Storage can't span two tables in
+      // one transaction) - recoverable via the UI, a smaller failure
+      // surface than partially-created teams.
+      const newEvent = await createEvent({
+        name: body.name,
+        date: body.date,
+        champion_gets_bye: !!body.champion_gets_bye,
+      })
 
-        // Create champion team if specified
-        if (body.champion_team) {
-          await transaction.request()
-            .input('event_id', newEvent.id)
-            .input('player1_id', Number(body.champion_team.player1_id))
-            .input('player2_id', Number(body.champion_team.player2_id))
-            .input('is_reigning_champion', 1)
-            .query(
-              `INSERT INTO cornhole_event_teams (event_id, player1_id, player2_id, is_reigning_champion)
-               VALUES (@event_id, @player1_id, @player2_id, @is_reigning_champion)`
-            )
-        }
-
-        // Create participant teams if specified
-        if (body.participant_teams && body.participant_teams.length > 0) {
-          for (const team of body.participant_teams) {
-            await transaction.request()
-              .input('event_id', newEvent.id)
-              .input('player1_id', Number(team.player1_id))
-              .input('player2_id', Number(team.player2_id))
-              .input('is_reigning_champion', 0)
-              .query(
-                `INSERT INTO cornhole_event_teams (event_id, player1_id, player2_id, is_reigning_champion)
-                 VALUES (@event_id, @player1_id, @player2_id, @is_reigning_champion)`
-              )
-          }
-        }
-
-        await transaction.commit()
-        return { jsonBody: newEvent }
-      } catch (innerErr) {
-        await transaction.rollback()
-        throw innerErr
+      const teamsToCreate: { event_id: number; player1_id: number; player2_id: number; is_reigning_champion: boolean }[] = []
+      if (body.champion_team) {
+        teamsToCreate.push({
+          event_id: newEvent.id,
+          player1_id: Number(body.champion_team.player1_id),
+          player2_id: Number(body.champion_team.player2_id),
+          is_reigning_champion: true,
+        })
       }
+      if (body.participant_teams?.length) {
+        for (const team of body.participant_teams) {
+          teamsToCreate.push({
+            event_id: newEvent.id,
+            player1_id: Number(team.player1_id),
+            player2_id: Number(team.player2_id),
+            is_reigning_champion: false,
+          })
+        }
+      }
+      if (teamsToCreate.length > 0) {
+        await createTeamsBatch(teamsToCreate)
+      }
+
+      return { jsonBody: newEvent }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
     }
@@ -115,22 +93,14 @@ app.http('events-update', {
     if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
-      const body = await req.json() as any
-      const pool = await getPool()
-      const result = await pool.request()
-        .input('id', id)
-        .input('name', body.name)
-        .input('date', body.date)
-        .input('champion_gets_bye', body.champion_gets_bye ? 1 : 0)
-        .query(
-          `UPDATE cornhole_events SET name = @name, [date] = @date, champion_gets_bye = @champion_gets_bye
-           OUTPUT INSERTED.id, CAST(INSERTED.name AS NVARCHAR(MAX)) AS name, INSERTED.[date], INSERTED.champion_gets_bye, INSERTED.created_at
-           WHERE id = @id`
-        )
-      if (result.recordset.length === 0) {
-        return { status: 404, jsonBody: { message: 'Event not found' } }
-      }
-      return { jsonBody: result.recordset[0] }
+      const body = (await req.json()) as any
+      const event = await updateEvent(id, {
+        name: body.name,
+        date: body.date,
+        champion_gets_bye: !!body.champion_gets_bye,
+      })
+      if (!event) return { status: 404, jsonBody: { message: 'Event not found' } }
+      return { jsonBody: event }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
     }
@@ -146,15 +116,14 @@ app.http('events-delete', {
     if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
-      const pool = await getPool()
-      await pool.request()
-        .input('id', id)
-        .query('DELETE FROM cornhole_events WHERE id = @id')
+      // Teams live in their own table now - clean those up too rather than
+      // leaving them behind as orphaned, unreachable data.
+      // TODO(cascade): also clean up this event's matches once that table
+      // migrates off SQL too.
+      await deleteTeamsForEvent(id)
+      await deleteEvent(id)
       return { jsonBody: { success: true } }
     } catch (err: any) {
-      if (err.number === 547 || err.message?.includes('REFERENCE')) {
-        return { status: 409, jsonBody: { message: 'Cannot delete: event has teams or matches' } }
-      }
       return { status: 500, jsonBody: { message: err.message } }
     }
   },
