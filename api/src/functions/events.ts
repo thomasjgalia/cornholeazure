@@ -2,6 +2,7 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/fu
 import { requireAuth, isRejection } from '../lib/auth'
 import { listEvents, getEvent, createEvent, updateEvent, deleteEvent } from '../lib/eventsTable'
 import { createTeamsBatch, deleteTeamsForEvent } from '../lib/teamsTable'
+import { deleteMatchesForEvent } from '../lib/matchesTable'
 
 app.http('events-list', {
   methods: ['GET'],
@@ -116,11 +117,10 @@ app.http('events-delete', {
     if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
-      // Teams live in their own table now - clean those up too rather than
-      // leaving them behind as orphaned, unreachable data.
-      // TODO(cascade): also clean up this event's matches once that table
-      // migrates off SQL too.
+      // Teams and matches live in their own tables now - clean those up too
+      // rather than leaving them behind as orphaned, unreachable data.
       await deleteTeamsForEvent(id)
+      await deleteMatchesForEvent(id)
       await deleteEvent(id)
       return { jsonBody: { success: true } }
     } catch (err: any) {

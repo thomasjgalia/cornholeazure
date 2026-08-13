@@ -1,7 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
-import { getPool } from '../db'
 import { requireAuth, isRejection } from '../lib/auth'
 import { PlayerRecord, listPlayers, createPlayer, updatePlayer, deletePlayer } from '../lib/playersTable'
+import { listAllTeams } from '../lib/teamsTable'
 
 // Never send profile_secret to the client - only a derived boolean saying
 // whether one is set, so the UI can show that without ever seeing the value.
@@ -10,15 +10,12 @@ function toPublic(p: PlayerRecord) {
   return { ...rest, has_secret: !!profile_secret }
 }
 
-// event_teams hasn't migrated off SQL yet, so this is the one place players.ts
-// still needs a SQL connection - to preserve the same delete-protection that used
-// to come from a foreign key constraint, now enforced in application code.
+// Replaces the delete-protection that used to come from a SQL foreign key -
+// now that event_teams has also moved to Table Storage, this is enforced
+// entirely in application code with no SQL connection needed anywhere.
 async function isPlayerReferenced(id: number): Promise<boolean> {
-  const pool = await getPool()
-  const result = await pool.request()
-    .input('id', id)
-    .query('SELECT TOP 1 id FROM cornhole_event_teams WHERE player1_id = @id OR player2_id = @id')
-  return result.recordset.length > 0
+  const teams = await listAllTeams()
+  return teams.some((t) => t.player1_id === id || t.player2_id === id)
 }
 
 app.http('players-list', {

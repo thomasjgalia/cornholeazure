@@ -1,6 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
-import { getPool } from '../db'
 import { requireAuth, isRejection } from '../lib/auth'
+import { listMatchesByEvent, createMatch, deleteMatch } from '../lib/matchesTable'
 
 app.http('matches-list', {
   methods: ['GET'],
@@ -12,16 +12,14 @@ app.http('matches-list', {
       if (!eventId) {
         return { status: 400, jsonBody: { message: 'eventId query parameter is required' } }
       }
-      const pool = await getPool()
-      const result = await pool.request()
-        .input('eventId', Number(eventId))
-        .query(
-          `SELECT id, winner_id, loser_id, created_at
-           FROM cornhole_event_matches
-           WHERE event_id = @eventId AND winner_id IS NOT NULL
-           ORDER BY id ASC`
-        )
-      return { jsonBody: result.recordset }
+      const matches = await listMatchesByEvent(Number(eventId))
+      // Same narrowed shape the old SQL query returned (id/winner/loser/created_at
+      // only), and the same winner_id IS NOT NULL filter.
+      const result = matches
+        .filter((m) => m.winner_id != null)
+        .sort((a, b) => a.id - b.id)
+        .map((m) => ({ id: m.id, winner_id: m.winner_id, loser_id: m.loser_id, created_at: m.created_at }))
+      return { jsonBody: result }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
     }
@@ -36,23 +34,18 @@ app.http('matches-create', {
     const session = requireAuth(req)
     if (isRejection(session)) return session
     try {
-      const body = await req.json() as any
-      const pool = await getPool()
-      const result = await pool.request()
-        .input('event_id', Number(body.event_id))
-        .input('winner_id', Number(body.winner_id))
-        .input('loser_id', Number(body.loser_id))
-        .input('round', body.round ?? 0)
-        .input('match_number', body.match_number ?? 0)
-        .input('team1_id', body.team1_id ? Number(body.team1_id) : null)
-        .input('team2_id', body.team2_id ? Number(body.team2_id) : null)
-        .input('is_bye', body.is_bye ? 1 : 0)
-        .query(
-          `INSERT INTO cornhole_event_matches (event_id, winner_id, loser_id, round, match_number, team1_id, team2_id, is_bye)
-           OUTPUT INSERTED.id, INSERTED.event_id, INSERTED.winner_id, INSERTED.loser_id, INSERTED.round, INSERTED.match_number, INSERTED.team1_id, INSERTED.team2_id, INSERTED.is_bye, INSERTED.created_at
-           VALUES (@event_id, @winner_id, @loser_id, @round, @match_number, @team1_id, @team2_id, @is_bye)`
-        )
-      return { jsonBody: result.recordset[0] }
+      const body = (await req.json()) as any
+      const match = await createMatch({
+        event_id: Number(body.event_id),
+        winner_id: Number(body.winner_id),
+        loser_id: Number(body.loser_id),
+        round: body.round ?? 0,
+        match_number: body.match_number ?? 0,
+        team1_id: body.team1_id ? Number(body.team1_id) : null,
+        team2_id: body.team2_id ? Number(body.team2_id) : null,
+        is_bye: !!body.is_bye,
+      })
+      return { jsonBody: match }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
     }
@@ -68,10 +61,7 @@ app.http('matches-delete', {
     if (isRejection(session)) return session
     try {
       const id = Number(req.params.id)
-      const pool = await getPool()
-      await pool.request()
-        .input('id', id)
-        .query('DELETE FROM cornhole_event_matches WHERE id = @id')
+      await deleteMatch(id)
       return { jsonBody: { success: true } }
     } catch (err: any) {
       return { status: 500, jsonBody: { message: err.message } }
