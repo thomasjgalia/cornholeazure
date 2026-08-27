@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatTeamName } from '@/lib/utils'
-import { EventRow, TeamWithPlayers } from '@/types'
+import { EventRow, TeamWithPlayers, SoldelcoEventRow } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+const NOT_LINKED = '__none__'
 
 interface TeamWithLosses extends TeamWithPlayers {
   lossCount: number
@@ -52,12 +61,23 @@ export default function BracketPage() {
     winnerId: number
     loserId: number
   } | null>(null)
+  const [soldelcoEvents, setSoldelcoEvents] = useState<SoldelcoEventRow[]>([])
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     if (eventId) {
       loadTournament()
     }
   }, [eventId])
+
+  useEffect(() => {
+    if (isAdmin) {
+      api
+        .get<SoldelcoEventRow[]>('/soldelco-events')
+        .then(setSoldelcoEvents)
+        .catch(() => {})
+    }
+  }, [isAdmin])
 
   async function loadTournament() {
     try {
@@ -300,6 +320,33 @@ export default function BracketPage() {
     }
   }
 
+  async function handleLinkChange(value: string) {
+    try {
+      await api.put(`/events/${eventId}/link`, {
+        soldelco_event_id: value === NOT_LINKED ? null : Number(value),
+      })
+      toast.success(value === NOT_LINKED ? 'Unlinked from SOLDelco' : 'Linked to SOLDelco event')
+      loadTournament()
+    } catch (error) {
+      toast.error('Failed to update link')
+      console.error(error)
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true)
+    try {
+      await api.post(`/events/${eventId}/sync`, {})
+      toast.success('Champion synced to SOLDelco Records')
+      loadTournament()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to sync')
+      console.error(error)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   async function confirmDeleteMatchResult() {
     if (deleteMatchId == null) return
     try {
@@ -336,6 +383,42 @@ export default function BracketPage() {
           </Button>
         )}
       </div>
+
+      {isAdmin && !loading && (
+        <Card className="mb-6">
+          <CardContent className="py-4">
+            <p className="text-sm font-medium mb-2">SOLDelco Records</p>
+            <div className="flex items-center gap-2">
+              <Select value={event?.soldelco_event_id ? String(event.soldelco_event_id) : NOT_LINKED} onValueChange={handleLinkChange}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Not linked to a SOLDelco event" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NOT_LINKED}>Not linked</SelectItem>
+                  {soldelcoEvents.map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      {e.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {tournamentComplete && event?.soldelco_event_id && (
+                <Button size="sm" onClick={handleSync} disabled={syncing}>
+                  {event.soldelco_competition_id ? 'Re-sync' : 'Sync'} champion
+                </Button>
+              )}
+            </div>
+            {event?.soldelco_competition_id && (
+              <p className="text-xs text-muted-foreground mt-2">Champion synced to SOLDelco Records.</p>
+            )}
+            {event?.soldelco_event_id && !tournamentComplete && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Linked -- the champion will sync once the tournament is complete.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {loading ? (
         <div>Loading tournament...</div>

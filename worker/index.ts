@@ -22,6 +22,41 @@ function mapPlayerRow(id: number, firstname: string, lastname: string) {
 
 const PLAYER_SELECT = "COALESCE(m.first_name, m.display_name) as firstname, COALESCE(m.last_name, '') as lastname";
 
+/**
+ * Same "loss-tracking, eliminated at 2 losses" rule as BracketPage.tsx's
+ * primary path. Returns the champion team, or null if the tournament isn't
+ * complete (exactly one team with fewer than 2 losses). Doesn't replicate
+ * the frontend's rare "everyone eliminated simultaneously" tie-break --
+ * that edge case just reports "not complete" here.
+ */
+async function computeChampion(env: Env, cornholeEventId: number) {
+	const { results: teams } = await env.DB.prepare('SELECT id, player1_id, player2_id FROM cornhole_teams WHERE event_id = ?')
+		.bind(cornholeEventId)
+		.all<{ id: number; player1_id: number; player2_id: number }>();
+	const { results: matches } = await env.DB.prepare('SELECT winner_id, loser_id FROM cornhole_matches WHERE event_id = ?')
+		.bind(cornholeEventId)
+		.all<{ winner_id: number; loser_id: number }>();
+
+	const losses = new Map<number, number>();
+	for (const t of teams) losses.set(t.id, 0);
+	for (const m of matches) losses.set(m.loser_id, (losses.get(m.loser_id) ?? 0) + 1);
+
+	const active = teams.filter((t) => (losses.get(t.id) ?? 0) < 2);
+	return active.length === 1 ? active[0] : null;
+}
+
+async function clearSoldelcoCompetition(env: Env, cornholeEventId: number, competitionId: number) {
+	// The UPDATE must run (and land) before the DELETE FROM competitions --
+	// cornhole_events.soldelco_competition_id still references that row
+	// otherwise, and D1 enforces the FK on the referenced side too.
+	await env.DB.batch([
+		env.DB.prepare('UPDATE cornhole_events SET soldelco_competition_id = NULL WHERE id = ?').bind(cornholeEventId),
+		env.DB.prepare('DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE competition_id = ?)').bind(competitionId),
+		env.DB.prepare('DELETE FROM teams WHERE competition_id = ?').bind(competitionId),
+		env.DB.prepare('DELETE FROM competitions WHERE id = ?').bind(competitionId),
+	]);
+}
+
 // ---- session ----
 
 app.get('/api/session', async (c) => {
@@ -42,20 +77,24 @@ app.get('/api/players', async (c) => {
 
 // ---- events ----
 
+const EVENT_COLUMNS = 'id, name, date, champion_gets_bye, created_at, soldelco_event_id, soldelco_competition_id';
+
 app.get('/api/events', async (c) => {
-	const { results } = await c.env.DB.prepare(
-		'SELECT id, name, date, champion_gets_bye, created_at FROM cornhole_events ORDER BY date DESC',
-	).all();
+	const { results } = await c.env.DB.prepare(`SELECT ${EVENT_COLUMNS} FROM cornhole_events ORDER BY date DESC`).all();
 	return c.json(results.map(mapEventRow));
 });
 
 app.get('/api/events/:id', async (c) => {
 	const id = Number(c.req.param('id'));
-	const row = await c.env.DB.prepare('SELECT id, name, date, champion_gets_bye, created_at FROM cornhole_events WHERE id = ?')
-		.bind(id)
-		.first();
+	const row = await c.env.DB.prepare(`SELECT ${EVENT_COLUMNS} FROM cornhole_events WHERE id = ?`).bind(id).first();
 	if (!row) return c.json({ message: 'Not found' }, 404);
 	return c.json(mapEventRow(row));
+});
+
+// SOLDelco events available to link this tournament to (same D1, different app's tables).
+app.get('/api/soldelco-events', async (c) => {
+	const { results } = await c.env.DB.prepare('SELECT id, title, slug, starts_at FROM events ORDER BY starts_at DESC').all();
+	return c.json(results);
 });
 
 app.post('/api/events', async (c) => {
@@ -119,12 +158,98 @@ app.delete('/api/events/:id', async (c) => {
 	if (auth instanceof Response) return auth;
 
 	const id = Number(c.req.param('id'));
+	const existing = await c.env.DB.prepare('SELECT soldelco_competition_id FROM cornhole_events WHERE id = ?')
+		.bind(id)
+		.first<{ soldelco_competition_id: number | null }>();
+	if (existing?.soldelco_competition_id) {
+		await clearSoldelcoCompetition(c.env, id, existing.soldelco_competition_id);
+	}
+
 	await c.env.DB.batch([
 		c.env.DB.prepare('DELETE FROM cornhole_matches WHERE event_id = ?').bind(id),
 		c.env.DB.prepare('DELETE FROM cornhole_teams WHERE event_id = ?').bind(id),
 		c.env.DB.prepare('DELETE FROM cornhole_events WHERE id = ?').bind(id),
 	]);
 	return c.json({ success: true });
+});
+
+// Link (or re-link/unlink) this tournament to a SOLDelco event. Can happen
+// any time relative to the tournament's own lifecycle -- before it starts,
+// mid-play, or after it's already complete.
+app.put('/api/events/:id/link', async (c) => {
+	const auth = await requireAdmin(c);
+	if (auth instanceof Response) return auth;
+
+	const id = Number(c.req.param('id'));
+	const body = await c.req.json();
+	const soldelcoEventId = body.soldelco_event_id ? Number(body.soldelco_event_id) : null;
+
+	const existing = await c.env.DB.prepare('SELECT soldelco_competition_id FROM cornhole_events WHERE id = ?')
+		.bind(id)
+		.first<{ soldelco_competition_id: number | null }>();
+	if (existing?.soldelco_competition_id) {
+		// Re-linking (or unlinking) invalidates any previously synced result --
+		// it would otherwise be left attached to the wrong SOLDelco event.
+		await clearSoldelcoCompetition(c.env, id, existing.soldelco_competition_id);
+	}
+
+	await c.env.DB.prepare('UPDATE cornhole_events SET soldelco_event_id = ?, soldelco_competition_id = NULL WHERE id = ?')
+		.bind(soldelcoEventId, id)
+		.run();
+	return c.json({ success: true });
+});
+
+// Push the champion into SOLDelco's competitions/teams once the tournament
+// is complete and linked. Safe to call more than once (upserts in place).
+app.post('/api/events/:id/sync', async (c) => {
+	const auth = await requireAdmin(c);
+	if (auth instanceof Response) return auth;
+
+	const id = Number(c.req.param('id'));
+	const event = await c.env.DB.prepare(
+		'SELECT id, name, date, soldelco_event_id, soldelco_competition_id FROM cornhole_events WHERE id = ?',
+	)
+		.bind(id)
+		.first<{ id: number; name: string; date: string; soldelco_event_id: number | null; soldelco_competition_id: number | null }>();
+	if (!event) return c.json({ message: 'Not found' }, 404);
+	if (!event.soldelco_event_id) return c.json({ message: 'Link this tournament to a SOLDelco event first' }, 400);
+
+	const champion = await computeChampion(c.env, id);
+	if (!champion) return c.json({ message: 'Tournament is not complete yet' }, 400);
+
+	let competitionId = event.soldelco_competition_id;
+	if (competitionId) {
+		await c.env.DB.prepare('UPDATE competitions SET title = ?, played_on = ? WHERE id = ?').bind(event.name, event.date, competitionId).run();
+	} else {
+		const inserted = await c.env.DB.prepare(
+			"INSERT INTO competitions (event_id, kind, title, played_on) VALUES (?, 'cornhole', ?, ?) RETURNING id",
+		)
+			.bind(event.soldelco_event_id, event.name, event.date)
+			.first<{ id: number }>();
+		competitionId = inserted!.id;
+		await c.env.DB.prepare('UPDATE cornhole_events SET soldelco_competition_id = ? WHERE id = ?').bind(competitionId, id).run();
+	}
+
+	// Re-create the champion team fresh each sync rather than trying to diff.
+	await c.env.DB.prepare('DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE competition_id = ?)')
+		.bind(competitionId)
+		.run();
+	await c.env.DB.prepare('DELETE FROM teams WHERE competition_id = ?').bind(competitionId).run();
+
+	const { results: players } = await c.env.DB.prepare('SELECT id, display_name FROM members WHERE id IN (?, ?)')
+		.bind(champion.player1_id, champion.player2_id)
+		.all<{ id: number; display_name: string }>();
+	const teamName = players.map((p) => p.display_name).join(' / ');
+
+	const team = await c.env.DB.prepare('INSERT INTO teams (competition_id, name, placement) VALUES (?, ?, 1) RETURNING id')
+		.bind(competitionId, teamName)
+		.first<{ id: number }>();
+	await c.env.DB.batch([
+		c.env.DB.prepare('INSERT INTO team_members (team_id, member_id) VALUES (?, ?)').bind(team!.id, champion.player1_id),
+		c.env.DB.prepare('INSERT INTO team_members (team_id, member_id) VALUES (?, ?)').bind(team!.id, champion.player2_id),
+	]);
+
+	return c.json({ success: true, competitionId });
 });
 
 // ---- teams ----

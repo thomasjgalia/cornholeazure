@@ -13,6 +13,18 @@ export interface EventRow {
   date: string
   champion_gets_bye: boolean
   created_at?: string
+  // Link to a SOLDelco event/competition -- set once the tournament's
+  // champion should be reflected on soldelco.com/records. See BracketPage's
+  // sync UI; not every tournament needs to be linked.
+  soldelco_event_id?: number | null
+  soldelco_competition_id?: number | null
+}
+
+export interface SoldelcoEventRow {
+  id: number
+  title: string
+  slug: string
+  starts_at: string | null
 }
 
 export interface EventTeamRow {
