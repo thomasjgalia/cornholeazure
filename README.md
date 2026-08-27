@@ -1,115 +1,61 @@
-# Cornhole Tournament Manager
+# SOL Cornhole
 
-A double-elimination bracket tournament management system for cornhole events.
+A loss-tracking double-elimination bracket tournament manager for the Sons of
+Liberty's Friday cornhole tournament. Hosted at `cornhole.soldelco.com`.
 
 ## Tech Stack
 
-- **Frontend:** React 18 + TypeScript + Vite
-- **Styling:** Tailwind CSS + Shadcn/ui components
-- **Backend:** Supabase (PostgreSQL)
-- **Routing:** React Router v6
-- **Deployment:** Vercel (planned)
+- **Frontend:** React 18 + TypeScript + Vite, Tailwind + shadcn/ui, React Router v6.
+- **Backend:** Hono running on the same Cloudflare Worker that serves the built
+  frontend as static assets (`worker/index.ts`).
+- **Database:** Cloudflare D1 — but not a database of its own. This app binds
+  to `soldelco`'s D1 database (see `wrangler.jsonc`) and reads/writes
+  `cornhole_events`, `cornhole_teams`, `cornhole_matches`. Player identity is
+  **not** stored here at all — it comes straight from SOLDelco's `members`
+  table (`GET /api/players` is a read-only view over it).
+- **Auth:** No login system of its own. It trusts the same signed
+  `sol_identity` cookie SOLDelco issues (shared across `*.soldelco.com` via a
+  `Domain=.soldelco.com` cookie attribute set on the SOLDelco side). Anyone
+  can view; only a member with `is_admin` set on their `members` row can
+  create/edit/delete anything. If you're not signed in as an admin, the header
+  links to `soldelco.com/whoami` to pick an identity.
 
-## Features
-
-- Player management (CRUD operations)
-- Event creation with configurable champion bye option
-- Team formation (2 players per team)
-- Dynamic double-elimination bracket generation
-  - Supports any number of teams (minimum 2)
-  - Automatic bye distribution
-  - Optional reigning champion bye
-- Card-based bracket visualization
-- Match result tracking
-- Bracket progression automation
-
-## Setup Instructions
-
-### 1. Install Dependencies
+## Local development
 
 ```bash
 npm install
+npm run worker:dev   # builds the frontend, then wrangler dev --remote
 ```
 
-### 2. Configure Supabase
-
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Run the SQL schema from `supabase-schema.sql` in the Supabase SQL Editor
-3. Copy `.env.example` to `.env`:
+`--remote` is deliberate — this app's whole point is reading the *real*
+shared `members` table, so local dev talks to the real D1 database rather
+than an isolated local copy. `.dev.vars` needs `IDENTITY_SECRET` set to the
+**same value** as SOLDelco's production secret, or cookie verification will
+never match.
 
 ```bash
-cp .env.example .env
+npm run worker:deploy   # builds the frontend, then wrangler deploy
 ```
 
-4. Fill in your Supabase credentials in `.env`:
+## Data model
 
-```
-VITE_SUPABASE_URL=your-project-url
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
+Schema lives in the SOLDelco repo (`c:\Dev\SOLDelco\migrations\0004_cornhole.sql`)
+since it owns the shared database — not duplicated here.
 
-### 3. Run Development Server
+- `cornhole_events(id, name, date, champion_gets_bye, created_at)`
+- `cornhole_teams(id, event_id, player1_id, player2_id, is_reigning_champion, created_at)`
+  — `player1_id`/`player2_id` reference `members(id)` directly.
+- `cornhole_matches(id, event_id, team1_id, team2_id, winner_id, loser_id, created_at)`
 
-```bash
-npm run dev
-```
+## The bracket algorithm
 
-The app will be available at `http://localhost:5174`
-
-### 4. Build for Production
-
-```bash
-npm run build
-```
-
-## Project Structure
-
-```
-/src
-  /components
-    /ui           # Reusable UI components (Button, Card, Dialog, etc.)
-  /hooks          # Custom React hooks for data operations
-  /lib            # Supabase client and utilities
-  /pages          # Route pages
-  /utils          # Helper functions (bracket generation, etc.)
-  /types.ts       # TypeScript type definitions
-  App.tsx         # Main layout component
-  main.tsx        # App entry point
-```
-
-## Database Schema
-
-### Tables
-
-- **players**: Player information (first_name, last_name)
-- **events**: Tournament events (name, date, champion_gets_bye)
-- **event_teams**: Teams per event (2 players, optional champion flag)
-- **event_matches**: Bracket matches (round, teams, winner, bye flag)
-
-### Key Constraints
-
-- Teams must have 2 different players
-- Only one reigning champion per event
-- Cascade delete when event is deleted
-
-## Development Status
-
-✅ Project structure and configuration
-✅ Database schema
-⏳ Player management
-⏳ Event management
-⏳ Team formation
-⏳ Bracket generation algorithm
-⏳ Bracket visualization
-⏳ Match result entry
-
-## Next Steps
-
-1. Implement player CRUD operations
-2. Implement event CRUD operations
-3. Build team formation interface
-4. Develop bracket generation algorithm
-5. Create bracket visualization UI
-6. Implement match result tracking
-7. Test with various team counts (4-10 teams)
-8. Deploy to Vercel
+The live, tuned tournament logic lives entirely inside
+`src/pages/BracketPage.tsx` (`getSuggestedMatches()` and the surrounding
+component state) — it's computed fresh from the flat match list on every
+load, not from a persisted bracket tree. Two other files in git history
+(`bracketLogic.ts`, `tournamentLogic.ts`) look like bracket logic but are
+**dead code** — nothing imports them outside their own test file. Don't
+"clean up" `BracketPage.tsx` into one of those without checking with the
+group first; a lot of tuning went into its current behavior (loss-tracking
+elimination at 2 losses, resting the most recent winner, reigning-champion
+bye handling).

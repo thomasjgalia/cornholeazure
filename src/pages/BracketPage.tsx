@@ -34,7 +34,7 @@ interface MatchResult {
 export default function BracketPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
-  const { isProfileClaimed } = useAuth()
+  const { isAdmin } = useAuth()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [teams, setTeams] = useState<TeamWithLosses[]>([])
   const [matchResults, setMatchResults] = useState<MatchResult[]>([])
@@ -330,7 +330,7 @@ export default function BracketPage() {
           <h1 className="text-3xl font-bold">{event?.name || 'Event'} - Tournament</h1>
           <p className="text-muted-foreground">Loss-tracking double elimination</p>
         </div>
-        {isProfileClaimed && !tournamentComplete && teams.length >= 2 && (
+        {isAdmin && !tournamentComplete && teams.length >= 2 && (
           <Button variant="outline" onClick={() => openMatchDialog()}>
             Record Match
           </Button>
@@ -384,7 +384,7 @@ export default function BracketPage() {
                     <div key={index} className="flex items-center gap-2 px-3 py-2 text-sm">
                       <button
                         type="button"
-                        disabled={!isProfileClaimed}
+                        disabled={!isAdmin}
                         onClick={() =>
                           setPendingQuickResult({ match, winnerId: match.team1.id, loserId: match.team2.id })
                         }
@@ -396,7 +396,7 @@ export default function BracketPage() {
                       <span className="text-xs font-bold text-muted-foreground shrink-0">vs</span>
                       <button
                         type="button"
-                        disabled={!isProfileClaimed}
+                        disabled={!isAdmin}
                         onClick={() =>
                           setPendingQuickResult({ match, winnerId: match.team2.id, loserId: match.team1.id })
                         }
@@ -484,7 +484,7 @@ export default function BracketPage() {
                             <span className="flex-1">
                               {loser && formatTeamName(loser)}
                             </span>
-                            {isProfileClaimed && (
+                            {isAdmin && (
                               <Button
                                 variant="ghost"
                                 size="sm"

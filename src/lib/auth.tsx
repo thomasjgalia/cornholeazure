@@ -1,53 +1,38 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { api } from '@/lib/api'
-import {
-  getStoredSession,
-  setStoredSession,
-  clearStoredSession,
-  StoredSession,
-  StoredSessionPlayer,
-} from '@/lib/api'
+
+interface Identity {
+  memberId: number
+  displayName: string
+}
+
+interface SessionResponse {
+  identity: Identity | null
+  isAdmin: boolean
+}
 
 interface AuthContextType {
-  claimedPlayer: StoredSessionPlayer | null
-  claimProfile: (playerid: number, secret: string) => Promise<void>
-  releaseProfile: () => void
-  isProfileClaimed: boolean
+  identity: Identity | null
+  isAdmin: boolean
+  loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<StoredSession | null>(null)
+  const [session, setSession] = useState<SessionResponse>({ identity: null, isAdmin: false })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setSession(getStoredSession())
+    api
+      .get<SessionResponse>('/session')
+      .then(setSession)
+      .catch(() => setSession({ identity: null, isAdmin: false }))
+      .finally(() => setLoading(false))
   }, [])
 
-  async function claimProfile(playerid: number, secret: string) {
-    const result = await api.post<{ token: string; player: StoredSessionPlayer }>(
-      '/auth/claim',
-      { playerid, secret }
-    )
-    const newSession: StoredSession = { token: result.token, player: result.player }
-    setStoredSession(newSession)
-    setSession(newSession)
-  }
-
-  function releaseProfile() {
-    clearStoredSession()
-    setSession(null)
-  }
-
   return (
-    <AuthContext.Provider
-      value={{
-        claimedPlayer: session?.player ?? null,
-        claimProfile,
-        releaseProfile,
-        isProfileClaimed: !!session,
-      }}
-    >
+    <AuthContext.Provider value={{ identity: session.identity, isAdmin: session.isAdmin, loading }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,11 +1,9 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { BottomBarProvider, BottomBarSlot } from '@/lib/bottomBar'
-import { Button } from '@/components/ui/button'
-import { User } from 'lucide-react'
 
 export default function App() {
-  const { claimedPlayer, releaseProfile, isProfileClaimed } = useAuth()
+  const { identity, isAdmin } = useAuth()
 
   return (
     <BottomBarProvider>
@@ -27,34 +25,18 @@ export default function App() {
               >
                 Events
               </NavLink>
-              <NavLink
-                to="/players"
-                className={({ isActive }) =>
-                  isActive ? 'text-primary font-medium' : 'text-muted-foreground'
-                }
-              >
-                Players
-              </NavLink>
             </nav>
-            <div className="flex items-center gap-2">
-              {isProfileClaimed ? (
-                <>
-                  <div className="text-xs text-muted-foreground hidden md:flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {claimedPlayer?.firstname} {claimedPlayer?.lastname}
-                  </div>
-                  <Button variant="success" size="sm" onClick={releaseProfile}>
-                    <User className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Release</span>
-                  </Button>
-                </>
+            <div className="text-xs text-muted-foreground">
+              {isAdmin ? (
+                <span>{identity?.displayName} (admin)</span>
               ) : (
-                <Link to="/claim-profile">
-                  <Button variant="outline" size="sm">
-                    <User className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Claim Profile</span>
-                  </Button>
-                </Link>
+                // soldelco.com's own `redirect` param only accepts same-origin
+                // paths (open-redirect protection), so it can't send someone
+                // back to this subdomain -- they land on soldelco.com's home
+                // page after picking a name and come back here manually.
+                <a href="https://soldelco.com/whoami" className="underline">
+                  Managing this tournament? Pick your name
+                </a>
               )}
             </div>
           </div>

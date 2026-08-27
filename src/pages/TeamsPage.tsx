@@ -31,7 +31,7 @@ import { Plus, Trash2, ArrowLeft, Trophy, Shuffle } from 'lucide-react'
 export default function TeamsPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
-  const { isProfileClaimed } = useAuth()
+  const { isAdmin } = useAuth()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [teams, setTeams] = useState<TeamWithPlayers[]>([])
   const [players, setPlayers] = useState<PlayerRow[]>([])
@@ -203,13 +203,13 @@ export default function TeamsPage() {
           <h1 className="text-3xl font-bold">{event?.name || 'Event'}</h1>
           <p className="text-muted-foreground">Manage teams for this event</p>
         </div>
-        {isProfileClaimed && matchCount === 0 && teams.filter((t) => !t.is_reigning_champion).length >= 2 && (
+        {isAdmin && matchCount === 0 && teams.filter((t) => !t.is_reigning_champion).length >= 2 && (
           <Button variant="outline" onClick={handleReshuffleClick} disabled={reshuffling}>
             <Shuffle className="mr-2 h-4 w-4" />
             {reshuffling ? 'Reshuffling...' : 'Reshuffle'}
           </Button>
         )}
-        {isProfileClaimed && (
+        {isAdmin && (
           <Button onClick={openAddDialog}>
             <Plus className="mr-2 h-4 w-4" />
             Add Team
@@ -251,7 +251,7 @@ export default function TeamsPage() {
                       Champion
                     </Badge>
                   )}
-                  {isProfileClaimed && (
+                  {isAdmin && (
                     <>
                       <Button
                         variant="ghost"

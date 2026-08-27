@@ -7,10 +7,8 @@ import { AuthProvider } from './lib/auth'
 import App from './App'
 import EventsListPage from './pages/EventsListPage'
 import EventDetailsPage from './pages/EventDetailsPage'
-import PlayersPage from './pages/PlayersPage'
 import TeamsPage from './pages/TeamsPage'
 import BracketPage from './pages/BracketPage'
-import ClaimProfilePage from './pages/ClaimProfilePage'
 
 const router = createBrowserRouter([
   {
@@ -22,8 +20,6 @@ const router = createBrowserRouter([
       { path: 'events/:eventId', element: <EventDetailsPage /> },
       { path: 'events/:eventId/teams', element: <TeamsPage /> },
       { path: 'events/:eventId/bracket', element: <BracketPage /> },
-      { path: 'players', element: <PlayersPage /> },
-      { path: 'claim-profile', element: <ClaimProfilePage /> },
     ],
   },
 ])

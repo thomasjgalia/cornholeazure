@@ -32,7 +32,7 @@ import { format } from 'date-fns'
 
 export default function EventsListPage() {
   const navigate = useNavigate()
-  const { isProfileClaimed } = useAuth()
+  const { isAdmin } = useAuth()
   const [events, setEvents] = useState<EventRow[]>([])
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -207,7 +207,7 @@ export default function EventsListPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Events</h1>
-        {isProfileClaimed && (
+        {isAdmin && (
           <Button onClick={openAddDialog}>
             <Plus className="mr-2 h-4 w-4" />
             Create Event
@@ -261,7 +261,7 @@ export default function EventsListPage() {
                   {format(new Date(event.date), 'MMMM d, yyyy')}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {isProfileClaimed && (
+                  {isAdmin && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -277,7 +277,7 @@ export default function EventsListPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className={isProfileClaimed ? '' : 'col-span-2'}
+                    className={isAdmin ? '' : 'col-span-2'}
                     onClick={(e) => {
                       e.stopPropagation()
                       navigate(`/events/${event.id}/teams`)

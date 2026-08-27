@@ -28,4 +28,7 @@ dist-ssr
 .env
 .env.local
 .env.production
-api/local.settings.json
+.dev.vars
+
+# wrangler local state
+.wrangler/
