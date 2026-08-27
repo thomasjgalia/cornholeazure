@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { BottomBarProvider, BottomBarSlot } from '@/lib/bottomBar'
+import { ArrowLeft } from 'lucide-react'
 
 export default function App() {
   const { identity, isAdmin } = useAuth()
@@ -13,9 +14,19 @@ export default function App() {
           style={{ paddingTop: 'env(safe-area-inset-top)' }}
         >
           <div className="container flex h-14 items-center justify-between gap-4">
-            <Link to="/" className="font-semibold">
-              SOL Cornhole
-            </Link>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://soldelco.com"
+                className="flex items-center justify-center h-8 w-8 -ml-1 text-muted-foreground hover:text-foreground"
+                aria-label="Back to SOL Delco"
+                title="Back to SOL Delco"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </a>
+              <Link to="/" className="font-semibold">
+                SOL Cornhole
+              </Link>
+            </div>
             <nav className="flex gap-4 text-sm items-center">
               <NavLink
                 to="/events"
@@ -26,16 +37,19 @@ export default function App() {
                 Events
               </NavLink>
             </nav>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground text-right shrink-0">
               {isAdmin ? (
-                <span>{identity?.displayName} (admin)</span>
+                <span>
+                  <span className="hidden sm:inline">{identity?.displayName} </span>
+                  (admin)
+                </span>
               ) : (
                 // soldelco.com's own `redirect` param only accepts same-origin
                 // paths (open-redirect protection), so it can't send someone
                 // back to this subdomain -- they land on soldelco.com's home
                 // page after picking a name and come back here manually.
                 <a href="https://soldelco.com/whoami" className="underline">
-                  Managing this tournament? Pick your name
+                  <span className="hidden sm:inline">Managing this tournament? </span>Pick your name
                 </a>
               )}
             </div>
