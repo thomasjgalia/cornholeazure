@@ -39,6 +39,16 @@ code from an earlier refactor attempt (see the git history around
 them without explicit confirmation — a lot of remediation went into the
 inline version working correctly.
 
+## Deployment is manual — always do it, don't just commit
+
+There is no CI/CD here (the old Azure Static Web Apps GitHub Actions
+workflow was deleted during the migration and nothing replaced it). Pushing
+to GitHub does **not** deploy anything. Treat "commit and push" and "ship
+this" as the same request: after committing, always also run
+`npm run worker:deploy` (build + `wrangler deploy`) so the change is
+actually live, rather than leaving deploy as a separate step the user has to
+ask for.
+
 ## Local dev
 
 `npm run worker:dev` runs `wrangler dev --remote` — deliberately against the
