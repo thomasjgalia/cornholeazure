@@ -222,7 +222,10 @@ app.post('/api/events/:id/sync', async (c) => {
 		await c.env.DB.prepare('UPDATE competitions SET title = ?, played_on = ? WHERE id = ?').bind(event.name, event.date, competitionId).run();
 	} else {
 		const inserted = await c.env.DB.prepare(
-			"INSERT INTO competitions (event_id, kind, title, played_on) VALUES (?, 'cornhole', ?, ?) RETURNING id",
+			// SOLDelco's `competitions.kind` describes scoring shape, not a fixed
+			// game list -- 'placement' is the generic "final standings entered
+			// manually" kind, which is what a cornhole bracket champion is.
+			"INSERT INTO competitions (event_id, kind, title, played_on) VALUES (?, 'placement', ?, ?) RETURNING id",
 		)
 			.bind(event.soldelco_event_id, event.name, event.date)
 			.first<{ id: number }>();
